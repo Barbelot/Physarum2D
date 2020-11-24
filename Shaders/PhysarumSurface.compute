@@ -1,0 +1,212 @@
+﻿#define NUM_THREADS 16
+
+#pragma kernel InitParticles
+#pragma kernel SpawnParticles
+#pragma kernel MoveParticles
+#pragma kernel UpdateTrail
+
+struct Particle
+{
+	float2 pos; 	// between 0-1
+	float angle;	// in radians
+	float4 color;
+	float age;
+	float lifetime;
+};
+
+float2 trailDimension;
+float decay;
+float wProj;
+bool stimuliActive;
+
+float sensorAngle;
+float rotationAngle;
+float sensorOffsetDistance;
+float stepSize;
+float lifetime;
+
+float _DeltaTime;
+
+RWStructuredBuffer<Particle> particleBuffer;
+RWTexture2D<float4> TrailBuffer;
+RWTexture2D<float4> Stimuli;
+
+struct Emitter {
+	float2 position;
+	float radius;
+};
+
+int _EmittersCount;
+
+StructuredBuffer<Emitter> _EmittersBuffer;
+
+/**********************
+FUNCTIONS
+**********************/
+
+uint wang_hash(uint seed)
+{
+	seed = (seed ^ 61) ^ (seed >> 16);
+	seed *= 9;
+	seed = seed ^ (seed >> 4);
+	seed *= 0x27d4eb2d;
+	seed = seed ^ (seed >> 15);
+	return seed;
+}
+
+float wang_float(uint hash)
+{
+	return hash / float(0x7FFFFFFF) / 2.0;
+}
+
+float directTo(float2 pos, float2 directedPos)
+{
+	float2 direction = directedPos - pos;
+	return atan2(direction.y, direction.x);
+}
+
+//return 1 if v inside the circle, return 0 otherwise
+float insideCircle(float2 v, float2 center, float radius)
+{
+	float2 position = v - center;
+	return (step(radius, length(position)) + 1.0) % 2.0;
+}
+
+float randomSign(float v)
+{
+	float x = wang_float(wang_hash(v));
+	return (step(0.5, x) * 2.0) - 1.0;
+}
+
+void InitParticle(uint3 id) {
+	float x = wang_float(wang_hash(id.x));
+	float y = wang_float(wang_hash(id.x + 1));
+	float2 pos = float2(x, y) * 0.1 + float2(0.45, 0.45);
+
+	float angle = directTo(pos, float2(0.5, 0.5));
+
+	float4 color = float4(1, 1, 1, 1);
+
+	particleBuffer[id.x].pos = pos;
+	particleBuffer[id.x].angle = angle;
+	particleBuffer[id.x].color = color;
+	particleBuffer[id.x].lifetime = lifetime;
+	particleBuffer[id.x].age = -1;
+}
+
+/**********************
+KERNELS
+**********************/
+
+[numthreads(NUM_THREADS,1,1)]
+void InitParticles(uint3 id: SV_DISPATCHTHREADID)
+{
+	InitParticle(id);
+}
+
+[numthreads(NUM_THREADS, 1, 1)]
+void SpawnParticles(uint3 id: SV_DISPATCHTHREADID)
+{
+	if (particleBuffer[id.x].age < 0) {
+		InitParticle(id);
+		particleBuffer[id.x].age = wang_float(wang_hash(id.x + 2)) * particleBuffer[id.x].lifetime;
+	}
+
+	if (particleBuffer[id.x].lifetime > 0)
+		particleBuffer[id.x].age += _DeltaTime;
+
+	if (particleBuffer[id.x].age > particleBuffer[id.x].lifetime)
+		particleBuffer[id.x].age = -1;
+}
+
+[numthreads(NUM_THREADS,1,1)]
+void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
+{
+	if (particleBuffer[id.x].age < 0)
+		return;
+
+	float angle = particleBuffer[id.x].angle;
+	float2 pos 	= particleBuffer[id.x].pos;
+
+	float2 frontPos 		= pos + float2(cos(angle) *sensorOffsetDistance, sin(angle) *sensorOffsetDistance);
+	float2 frontLeftPos 	= pos + float2(cos(angle + sensorAngle) *sensorOffsetDistance, sin(angle + sensorAngle) *sensorOffsetDistance);
+	float2 frontRightPos 	= pos + float2(cos(angle - sensorAngle) *sensorOffsetDistance, sin(angle - sensorAngle) *sensorOffsetDistance);
+	
+	float F 	= TrailBuffer[frontPos * trailDimension.xy].x;
+	float FL 	= TrailBuffer[frontLeftPos * trailDimension.xy].x;
+	float FR 	= TrailBuffer[frontRightPos * trailDimension.xy].x;
+
+	//decide on the next best step
+	if((F > FL) && (F > FR))
+	{
+		//angle -=  rotationAngle;
+	}
+	else if	((F < FL) && (F < FR))
+	{	
+		angle = angle + rotationAngle * randomSign(id.x);
+
+		//if (FL > FR) {
+		//	angle += rotationAngle;
+		//}
+		//else {
+		//	angle -= rotationAngle;
+		//}
+	}
+	else if	(FL < FR)
+	{
+		angle -= rotationAngle; 
+	}
+	else if	(FR < FL )
+	{
+		angle += rotationAngle; 
+	}
+
+	float2 nextPos = pos + float2(cos(angle) *stepSize, sin(angle) *stepSize);
+
+	//check if nextPos is within the boundries
+	float t1 = insideCircle(nextPos, float2(0.5, 0.5), 0.5);
+	angle = angle + rotationAngle * randomSign(id.x+1) * (t1-1);
+	nextPos = saturate(nextPos*t1 + pos*(1-t1));
+
+	particleBuffer[id.x].pos = nextPos;
+	
+	//if the particle moved, leave a mark in the trail buffer
+	if(distance(nextPos, pos) > 0.0001)
+	{
+		TrailBuffer[nextPos * trailDimension.xy] += particleBuffer[id.x].color;
+	}
+	
+	particleBuffer[id.x].angle = angle;
+}
+
+[numthreads(NUM_THREADS, NUM_THREADS,1)]
+void UpdateTrail (uint3 id : SV_DISPATCHTHREADID)
+{
+	float4 value;
+	if(stimuliActive)
+	{
+		value = TrailBuffer[id.xy] + (Stimuli[id.xy] * wProj);
+	}
+	else
+	{
+		value = TrailBuffer[id.xy];
+	}
+	
+	float3 d = float3(1, -1, 0.0);
+	
+	//mean filter
+	value = value;
+	value += TrailBuffer[id.xy - d.xx]; // -1,-1
+	value += TrailBuffer[id.xy - d.zx]; // 0, -1
+	value += TrailBuffer[id.xy - d.yx]; // +1, -1
+	value += TrailBuffer[id.xy - d.xz]; // -1, 0
+	value += TrailBuffer[id.xy + d.xz]; // +1, 0
+	value += TrailBuffer[id.xy + d.yx]; // -1, +1
+	value += TrailBuffer[id.xy + d.zx]; // 0, +1
+	value += TrailBuffer[id.xy + d.xx]; // +1, +1
+	
+	value = (value / 9) * (1-decay);
+
+	TrailBuffer[id.xy] = float4(value.x, value.y, value.z, 1.0);
+}
+
