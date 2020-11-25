@@ -1,4 +1,6 @@
 ﻿#define NUM_THREADS 16
+#define PI 3.14159265359
+#define TWOPI 6.28318530718
 
 #pragma kernel InitParticles
 #pragma kernel SpawnParticles
@@ -7,7 +9,7 @@
 
 struct Particle
 {
-	float2 pos; 	// between 0-1
+	float2 position; 	// between 0-1
 	float angle;	// in radians
 	float4 color;
 	float age;
@@ -78,18 +80,22 @@ float randomSign(float v)
 	return (step(0.5, x) * 2.0) - 1.0;
 }
 
-void InitParticle(uint3 id) {
-	float x = wang_float(wang_hash(id.x));
-	float y = wang_float(wang_hash(id.x + 1));
-	float2 pos = float2(x, y) * 0.1 + float2(0.45, 0.45);
+float Random(uint seed) {
 
-	float angle = directTo(pos, float2(0.5, 0.5));
+	return wang_float(wang_hash(seed));
+}
 
-	float4 color = float4(1, 1, 1, 1);
+float2 RandomInsideCircle(uint seed, float2 center, float radius) {
 
-	particleBuffer[id.x].pos = pos;
-	particleBuffer[id.x].angle = angle;
-	particleBuffer[id.x].color = color;
+	float randomAngle = Random(seed) * TWOPI;
+	return float2(cos(randomAngle), sin(randomAngle)) * radius * Random(seed + 1) + center;
+}
+
+void InitParticle(uint3 id, int emitterIndex) {
+
+	particleBuffer[id.x].position = RandomInsideCircle(id.x, _EmittersBuffer[emitterIndex].position, _EmittersBuffer[emitterIndex].radius);
+	particleBuffer[id.x].angle = Random(id.x + 2) * TWOPI;
+	particleBuffer[id.x].color = float4(1, 1, 1, 1);
 	particleBuffer[id.x].lifetime = lifetime;
 	particleBuffer[id.x].age = -1;
 }
@@ -101,21 +107,24 @@ KERNELS
 [numthreads(NUM_THREADS,1,1)]
 void InitParticles(uint3 id: SV_DISPATCHTHREADID)
 {
-	InitParticle(id);
+	particleBuffer[id.x].position = RandomInsideCircle(id.x, float2(0.5, 0.5), 0.2);
+	particleBuffer[id.x].angle = Random(id.x + 2) * TWOPI;
+	particleBuffer[id.x].color = float4(1, 1, 1, 1);
+	particleBuffer[id.x].lifetime = lifetime;
+	particleBuffer[id.x].age = -1;
 }
 
 [numthreads(NUM_THREADS, 1, 1)]
 void SpawnParticles(uint3 id: SV_DISPATCHTHREADID)
 {
 	if (particleBuffer[id.x].age < 0) {
-		InitParticle(id);
+		InitParticle(id, 0);
 		particleBuffer[id.x].age = wang_float(wang_hash(id.x + 2)) * particleBuffer[id.x].lifetime;
 	}
 
-	if (particleBuffer[id.x].lifetime > 0)
-		particleBuffer[id.x].age += _DeltaTime;
+	particleBuffer[id.x].age += _DeltaTime;
 
-	if (particleBuffer[id.x].age > particleBuffer[id.x].lifetime)
+	if (particleBuffer[id.x].age > particleBuffer[id.x].lifetime && particleBuffer[id.x].lifetime)
 		particleBuffer[id.x].age = -1;
 }
 
@@ -126,7 +135,7 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 		return;
 
 	float angle = particleBuffer[id.x].angle;
-	float2 pos 	= particleBuffer[id.x].pos;
+	float2 pos 	= particleBuffer[id.x].position;
 
 	float2 frontPos 		= pos + float2(cos(angle) *sensorOffsetDistance, sin(angle) *sensorOffsetDistance);
 	float2 frontLeftPos 	= pos + float2(cos(angle + sensorAngle) *sensorOffsetDistance, sin(angle + sensorAngle) *sensorOffsetDistance);
@@ -164,11 +173,11 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	float2 nextPos = pos + float2(cos(angle) *stepSize, sin(angle) *stepSize);
 
 	//check if nextPos is within the boundries
-	float t1 = insideCircle(nextPos, float2(0.5, 0.5), 0.5);
-	angle = angle + rotationAngle * randomSign(id.x+1) * (t1-1);
-	nextPos = saturate(nextPos*t1 + pos*(1-t1));
+	//float t1 = insideCircle(nextPos, float2(0.5, 0.5), 0.5);
+	//angle = angle + rotationAngle * randomSign(id.x+1) * (t1-1);
+	//nextPos = saturate(nextPos*t1 + pos*(1-t1));
 
-	particleBuffer[id.x].pos = nextPos;
+	particleBuffer[id.x].position = nextPos;
 	
 	//if the particle moved, leave a mark in the trail buffer
 	if(distance(nextPos, pos) > 0.0001)

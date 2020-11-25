@@ -18,8 +18,8 @@ public class PhysarumBehaviour : MonoBehaviour
     [Range(0f, 1f)] public float wProj = 0.1f;
 
     [Header("Particles Parameters")]
-    public float sensorAngleDegrees = 45f; 	//in degrees
-    public float rotationAngleDegrees = 45f;//in degrees
+    [Range(-180f, 180f)] public float sensorAngleDegrees = 45f; 	//in degrees
+    [Range(-180f, 180f)] public float rotationAngleDegrees = 45f;//in degrees
     [Range(0f, 1f)] public float sensorOffsetDistance = 0.01f;
     [Range(0f, 1f)] public float stepSize = 0.001f;
     public float lifetime = 0;
