@@ -13,6 +13,8 @@ public class PhysarumEmitter : MonoBehaviour
 	[Header("Physarum Emitter")]
 	public string behaviourID;
 	public float radius = 0.1f;
+	public float spawnRate = 1;
+	public int capacity = 1000000;
 
 	[Header("Gizmos")]
 	public bool showGizmos = true;

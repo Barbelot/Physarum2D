@@ -7,7 +7,6 @@ public class PhysarumBehaviour : MonoBehaviour
     public string ID;
 
     [Header("Initial Values")]
-    [SerializeField] private int numberOfParticles = 10000;
     [SerializeField] private int dimension = 256;
     [SerializeField] private ComputeShader shader;
     [SerializeField] private bool stimuliActive = true;
@@ -18,33 +17,40 @@ public class PhysarumBehaviour : MonoBehaviour
     [Range(0f, 1f)] public float wProj = 0.1f;
 
     [Header("Particles Parameters")]
+    public bool synchronizeSensorAndRotation = false;
     [Range(-180f, 180f)] public float sensorAngleDegrees = 45f; 	//in degrees
     [Range(-180f, 180f)] public float rotationAngleDegrees = 45f;//in degrees
     [Range(0f, 1f)] public float sensorOffsetDistance = 0.01f;
     [Range(0f, 1f)] public float stepSize = 0.001f;
     public float lifetime = 0;
 
+    [Header("Debug")]
+    public bool debugParticles = false;
+
     public struct Emitter
     {
         public Vector2 position;
         public float radius;
+        public float spawnRate;
+        public int capacity;
     }
 
-    private const int _physarumEmitterSize = 3 * sizeof(float);
+    private const int _physarumEmitterStride = 4 * sizeof(float) + 1 * sizeof(int);
 
-    private ComputeBuffer _emittersBuffer;
     private List<PhysarumEmitter> _emittersList;
-    private Emitter[] _emittersArray;
+    //private Emitter[] _emittersArray;
+    //private ComputeBuffer _emittersBuffer;
 
     //private int numberOfParticles;
     private float sensorAngle; 				//in radians
     private float rotationAngle;   			//in radians
     private RenderTexture trail;
     private RenderTexture RWStimuli;
-    private int initParticlesKernel, spawnParticlesKernel, moveParticlesKernel, updateTrailKernel;
-    private ComputeBuffer particleBuffer;
+    private RenderTexture particleTexture;
+    private int initParticlesKernel, spawnParticlesKernel, moveParticlesKernel, updateTrailKernel, cleanParticleTexture, writeParticleTexture;
+    private ComputeBuffer[] particleBuffers;
 
-    private static int _groupCount = 16;       // Group size has to be same with the compute shader group size
+    private static int _groupCount = 32;       // Group size has to be same with the compute shader group size
 
     struct Particle
     {
@@ -64,7 +70,7 @@ public class PhysarumBehaviour : MonoBehaviour
         }
     };
 
-    private int _particleSize = 9;
+    private const int _particleStride = 9 * sizeof(float);
 
     private bool _initialized = false;
 
@@ -83,20 +89,27 @@ public class PhysarumBehaviour : MonoBehaviour
 
     void Update() {
 
-        UpdateEmittersBuffer();
+        if (synchronizeSensorAndRotation)
+            rotationAngleDegrees = sensorAngleDegrees;
+
+        //UpdateEmittersBuffer();
         UpdateParticles();
         UpdateTrail();
+
+        if (debugParticles)
+            UpdateParticleTexture();
     }
 
     void OnDisable() {
-        if (particleBuffer != null) particleBuffer.Release();
-
-        ReleaseEmittersBuffer();
+        ReleaseParticlesBuffer();
+        //ReleaseEmittersBuffer();
     }
 
-    #endregion
+	#endregion
 
-    void Initialize() {
+	#region Initializations
+
+	void Initialize() {
 
         if (shader == null) {
             Debug.LogError("PhysarumSurface shader has to be assigned for PhysarumBehaviour to work.");
@@ -108,34 +121,41 @@ public class PhysarumBehaviour : MonoBehaviour
         spawnParticlesKernel = shader.FindKernel("SpawnParticles");
         moveParticlesKernel = shader.FindKernel("MoveParticles");
         updateTrailKernel = shader.FindKernel("UpdateTrail");
+        cleanParticleTexture = shader.FindKernel("CleanParticleTexture");
+        writeParticleTexture = shader.FindKernel("WriteParticleTexture");
 
-        InitializeParticles();
         InitializeTrail();
         InitializeStimuli();
         InitializeEmitters();
+        InitializeParticlesBuffer();
+
+        if (debugParticles)
+            InitializeParticleTexture();
 
         _initialized = true;
     }
 
-    void InitializeParticles()
-    {
+    void InitializeParticles(int index) {
         // allocate memory for the particles
-        //numberOfParticles = (int)(dimension * dimension * percentageParticles);
-        if (numberOfParticles < _groupCount) numberOfParticles = _groupCount;
+        if (_emittersList[index].capacity > _groupCount * 65535) {
+            _emittersList[index].capacity = _groupCount * 65535;
+            Debug.Log("Reduced emitter " + _emittersList[index].name + " capacity to maximum capacity for " + _groupCount + " threadGroups (" + _groupCount * 65535 + ").");
+        }
 
-        Particle[] data = new Particle[numberOfParticles];
-        particleBuffer = new ComputeBuffer(data.Length, _particleSize * sizeof(float));
-        particleBuffer.SetData(data);
+        Particle[] data = new Particle[_emittersList[index].capacity];
+        particleBuffers[index] = new ComputeBuffer(data.Length, _particleStride);
+        particleBuffers[index].SetData(data);
 
-        //initialize particles with random positions
-        shader.SetInt("numberOfParticles", numberOfParticles);
-        shader.SetVector("trailDimension", Vector2.one * dimension);
-        shader.SetBuffer(initParticlesKernel, "particleBuffer", particleBuffer);
-        shader.SetFloat("lifetime", lifetime);
-        shader.Dispatch(initParticlesKernel, numberOfParticles / _groupCount, 1, 1);
+        shader.SetFloat("_Lifetime", lifetime);
 
-        shader.SetBuffer(moveParticlesKernel, "particleBuffer", particleBuffer);
-        shader.SetBuffer(spawnParticlesKernel, "particleBuffer", particleBuffer);
+        shader.SetInt("_EmitterCapacity", _emittersList[index].capacity);
+        shader.SetVector("_EmitterPosition", _emittersList[index].position);
+        shader.SetFloat("_EmitterRadius", _emittersList[index].radius);
+        shader.SetFloat("_EmitterSpawnRate", _emittersList[index].spawnRate);
+
+        shader.SetBuffer(initParticlesKernel, "_ParticleBuffer", particleBuffers[index]);
+
+        shader.Dispatch(initParticlesKernel, _emittersList[index].capacity / _groupCount, 1, 1);
     }
 
     void InitializeTrail()
@@ -147,11 +167,25 @@ public class PhysarumBehaviour : MonoBehaviour
         var rend = GetComponent<Renderer>();
         rend.material.mainTexture = trail;
 
-        shader.SetTexture(moveParticlesKernel, "TrailBuffer", trail);
-        shader.SetTexture(updateTrailKernel, "TrailBuffer", trail);
+        shader.SetVector("_TrailDimension", Vector2.one * dimension);
+
+        shader.SetTexture(moveParticlesKernel, "_TrailBuffer", trail);
+        shader.SetTexture(updateTrailKernel, "_TrailBuffer", trail);
     }
 
-    void InitializeStimuli()
+	void InitializeParticleTexture() {
+		particleTexture = new RenderTexture(dimension, dimension, 24);
+		particleTexture.enableRandomWrite = true;
+		particleTexture.Create();
+
+		var rend = GetComponent<Renderer>();
+		rend.material.mainTexture = particleTexture;
+
+		shader.SetTexture(cleanParticleTexture, "_ParticleTexture", particleTexture);
+		shader.SetTexture(writeParticleTexture, "_ParticleTexture", particleTexture);
+	}
+
+	void InitializeStimuli()
     {
         if (Stimuli == null)
         {
@@ -165,50 +199,103 @@ public class PhysarumBehaviour : MonoBehaviour
             RWStimuli.enableRandomWrite = true;
             Graphics.Blit(Stimuli, RWStimuli);
         }
-        shader.SetBool("stimuliActive", stimuliActive);
-        shader.SetTexture(updateTrailKernel, "Stimuli", RWStimuli);
+        shader.SetBool("_StimuliActive", stimuliActive);
+        shader.SetTexture(updateTrailKernel, "_Stimuli", RWStimuli);
     }
+
+    void InitializeParticlesBuffer() {
+
+        ReleaseParticlesBuffer();
+
+        particleBuffers = new ComputeBuffer[_emittersList.Count];
+
+        for (int i = 0; i < particleBuffers.Length; i++)
+            InitializeParticles(i);
+    }
+
+	#endregion
+
+	#region Release
+
+	void ReleaseParticlesBuffer() {
+
+        if (particleBuffers == null)
+            return;
+
+        foreach (var particleBuffer in particleBuffers) {
+            if (particleBuffer != null)
+                particleBuffer.Release();
+        }
+    }
+
+    #endregion
+
+    #region Updates
 
     void UpdateParticles()
     {
-        SpawnParticles();
-        MoveParticles();
+        for (int i = 0; i < _emittersList.Count; i++) {
+            SpawnParticles(i);
+            MoveParticles(i);
+        }
     }
 
-    void SpawnParticles() {
+    void SpawnParticles(int index) {
 
         shader.SetFloat("_DeltaTime", Time.deltaTime);
+        shader.SetFloat("_AbsoluteTime", Time.time);
 
-        shader.Dispatch(spawnParticlesKernel, numberOfParticles / _groupCount, 1, 1);
+        shader.SetInt("_EmitterCapacity", _emittersList[index].capacity);
+        shader.SetVector("_EmitterPosition", _emittersList[index].position);
+        shader.SetFloat("_EmitterRadius", _emittersList[index].radius);
+        shader.SetFloat("_EmitterSpawnRate", _emittersList[index].spawnRate);
+
+        shader.SetBuffer(spawnParticlesKernel, "_ParticleBuffer", particleBuffers[index]);
+
+        shader.Dispatch(spawnParticlesKernel, _emittersList[index].capacity / _groupCount, 1, 1);
     }
 
-    void MoveParticles() {
+    void MoveParticles(int index) {
 
         sensorAngle = sensorAngleDegrees * 0.0174533f;
         rotationAngle = rotationAngleDegrees * 0.0174533f;
 
-        shader.SetFloat("sensorAngle", sensorAngle);
-        shader.SetFloat("rotationAngle", rotationAngle);
-        shader.SetFloat("sensorOffsetDistance", sensorOffsetDistance);
-        shader.SetFloat("stepSize", stepSize);
+        shader.SetFloat("_SensorAngle", sensorAngle);
+        shader.SetFloat("_RotationAngle", rotationAngle);
+        shader.SetFloat("_SensorOffsetDistance", sensorOffsetDistance);
+        shader.SetFloat("_StepSize", stepSize);
 
-        shader.Dispatch(moveParticlesKernel, numberOfParticles / _groupCount, 1, 1);
+        shader.SetBuffer(moveParticlesKernel, "_ParticleBuffer", particleBuffers[index]);
+
+        shader.Dispatch(moveParticlesKernel, _emittersList[index].capacity / _groupCount, 1, 1);
     }
 
     void UpdateTrail()
     {
-        shader.SetFloat("decay", decay);
-        shader.SetFloat("wProj", wProj);
+        shader.SetFloat("_Decay", decay);
+        shader.SetFloat("_WProj", wProj);
         shader.Dispatch(updateTrailKernel, dimension / _groupCount, dimension / _groupCount, 1);
     }
 
-    #region Emitters
+    void UpdateParticleTexture() {
 
-    void InitializeEmitters() {
+        shader.Dispatch(cleanParticleTexture, dimension / _groupCount, dimension / _groupCount, 1);
+
+        for (int i = 0; i < particleBuffers.Length; i++) {
+            shader.SetBuffer(writeParticleTexture, "_ParticleBuffer", particleBuffers[i]);
+            shader.Dispatch(writeParticleTexture, _emittersList[i].capacity / _groupCount, 1, 1);
+        }
+    }
+
+	#endregion
+
+	#region Emitters
+
+	void InitializeEmitters() {
 
         CreateEmittersList();
-        CreateEmittersArray();
-        CreateEmittersBuffer();
+        //CreateEmittersArray();
+        //CreateEmittersBuffer();
     }
 
     void CreateEmittersList() {
@@ -216,46 +303,47 @@ public class PhysarumBehaviour : MonoBehaviour
         _emittersList = new List<PhysarumEmitter>();
     }
 
-    void CreateEmittersArray() {
+    //void CreateEmittersArray() {
 
-        _emittersArray = _emittersList.Count > 0 ? new Emitter[_emittersList.Count] : new Emitter[1];
-    }
+    //    _emittersArray = _emittersList.Count > 0 ? new Emitter[_emittersList.Count] : new Emitter[1];
+    //}
 
-    void CreateEmittersBuffer() {
+    //void CreateEmittersBuffer() {
 
-        if (_emittersBuffer != null)
-            _emittersBuffer.Release();
+    //    if (_emittersBuffer != null)
+    //        _emittersBuffer.Release();
 
-        _emittersBuffer = _emittersList.Count > 0 ? new ComputeBuffer(_emittersList.Count, _physarumEmitterSize) : new ComputeBuffer(1, _physarumEmitterSize);
+    //    _emittersBuffer = _emittersList.Count > 0 ? new ComputeBuffer(_emittersList.Count, _physarumEmitterStride) : new ComputeBuffer(1, _physarumEmitterStride);
 
-        UpdateEmittersBuffer();
-    }
+    //    UpdateEmittersBuffer();
+    //}
 
-    void UpdateEmittersArray() {
+    //void UpdateEmittersArray() {
 
-        if (_emittersArray.Length != _emittersList.Count)
-            CreateEmittersArray();
+    //    if (_emittersArray.Length != _emittersList.Count)
+    //        CreateEmittersArray();
 
-        for (int i = 0; i < _emittersList.Count; i++) {
-            _emittersArray[i].position = _emittersList[i].position;
-            _emittersArray[i].radius = _emittersList[i].radius;
-        }
-    }
+    //    for (int i = 0; i < _emittersList.Count; i++) {
+    //        _emittersArray[i].position = _emittersList[i].position;
+    //        _emittersArray[i].radius = _emittersList[i].radius;
+    //        _emittersArray[i].spawnRate = _emittersList[i].spawnRate;
+    //    }
+    //}
 
-    void UpdateEmittersBuffer() {
+    //void UpdateEmittersBuffer() {
 
-        UpdateEmittersArray();
+    //    UpdateEmittersArray();
 
-        _emittersBuffer.SetData(_emittersArray);
+    //    _emittersBuffer.SetData(_emittersArray);
 
-        shader.SetBuffer(spawnParticlesKernel, "_EmittersBuffer", _emittersBuffer);
-        shader.SetInt("_EmittersCount", _emittersList.Count);
-    }
+    //    shader.SetBuffer(spawnParticlesKernel, "_EmittersBuffer", _emittersBuffer);
+    //    shader.SetInt("_EmittersCount", _emittersList.Count);
+    //}
 
-    void ReleaseEmittersBuffer() {
+    //void ReleaseEmittersBuffer() {
 
-        _emittersBuffer.Release();
-    }
+    //    _emittersBuffer.Release();
+    //}
 
     public void AddEmitter(PhysarumEmitter emitter) {
 
@@ -264,14 +352,16 @@ public class PhysarumBehaviour : MonoBehaviour
 
         _emittersList.Add(emitter);
 
-        CreateEmittersBuffer();
+        //CreateEmittersBuffer();
+        InitializeParticlesBuffer();
     }
 
     public void RemoveEmitter(PhysarumEmitter emitter) {
 
         _emittersList.Remove(emitter);
 
-        CreateEmittersBuffer();
+        //CreateEmittersBuffer();
+        InitializeParticlesBuffer();
     }
 
     #endregion
