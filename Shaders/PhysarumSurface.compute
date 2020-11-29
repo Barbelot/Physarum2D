@@ -82,6 +82,11 @@ void InitParticle(uint3 id) {
 	_ParticleBuffer[id.x].age = -1;
 }
 
+float ReadTrail(float2 pos) {
+
+	return _TrailBuffer[pos * _TrailDimension.xy].w;
+}
+
 /**********************
 KERNELS
 **********************/
@@ -96,9 +101,9 @@ void InitParticles(uint3 id: SV_DISPATCHTHREADID)
 void SpawnParticles(uint3 id: SV_DISPATCHTHREADID)
 {
 	//Spawn
-	if (_ParticleBuffer[id.x].age < 0 && Random(id.x + _AbsoluteTime) < _EmitterSpawnRate * _DeltaTime / _EmitterCapacity) {
+	if (_ParticleBuffer[id.x].age < 0 && Random(id.x + _AbsoluteTime * 1000) < _EmitterSpawnRate * _DeltaTime / _EmitterCapacity) {
 		InitParticle(id);
-		_ParticleBuffer[id.x].age = Random(id.x + 2) * _ParticleBuffer[id.x].lifetime;
+		_ParticleBuffer[id.x].age = 0;
 	}
 
 	//Did not spawn, ignore
@@ -126,9 +131,9 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	float2 frontLeftPos 	= pos + float2(cos(angle + _SensorAngle) * _SensorOffsetDistance, sin(angle + _SensorAngle) * _SensorOffsetDistance);
 	float2 frontRightPos 	= pos + float2(cos(angle - _SensorAngle) * _SensorOffsetDistance, sin(angle - _SensorAngle) * _SensorOffsetDistance);
 	
-	float F 	= _TrailBuffer[frontPos * _TrailDimension.xy].x;
-	float FL 	= _TrailBuffer[frontLeftPos * _TrailDimension.xy].x;
-	float FR 	= _TrailBuffer[frontRightPos * _TrailDimension.xy].x;
+	float F 	= ReadTrail(frontPos);
+	float FL 	= ReadTrail(frontLeftPos);
+	float FR 	= ReadTrail(frontRightPos);
 
 	//decide on the next best step
 	if((F > FL) && (F > FR))
@@ -201,7 +206,9 @@ void UpdateTrail (uint3 id : SV_DISPATCHTHREADID)
 	
 	value = (value / 9) * (1-_Decay);
 
-	_TrailBuffer[id.xy] = float4(value.x, value.y, value.z, 1.0);
+	_TrailBuffer[id.xy] = value;
+
+	//_TrailBuffer[id.xy] = Random(id.x + _AbsoluteTime * 10000) * float4(1, 1, 1, 1);
 }
 
 [numthreads(NUM_THREADS, NUM_THREADS, 1)]
