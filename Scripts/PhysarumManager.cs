@@ -27,21 +27,8 @@ public class PhysarumManager : MonoBehaviour
     [Header("Debug")]
     public bool debugParticles = false;
 
-    public struct Emitter
-    {
-        public Vector2 position;
-        public float radius;
-        public float spawnRate;
-        public int capacity;
-    }
-
-    private const int _physarumEmitterStride = 4 * sizeof(float) + 1 * sizeof(int);
-
     private List<PhysarumEmitter> _emittersList;
-    //private Emitter[] _emittersArray;
-    //private ComputeBuffer _emittersBuffer;
 
-    //private int numberOfParticles;
     private float sensorAngle; 				//in radians
     private float rotationAngle;   			//in radians
     private RenderTexture trail;
@@ -152,6 +139,9 @@ public class PhysarumManager : MonoBehaviour
         shader.SetVector("_EmitterPosition", _emittersList[index].position);
         shader.SetFloat("_EmitterRadius", _emittersList[index].radius);
         shader.SetFloat("_EmitterSpawnRate", _emittersList[index].spawnRate);
+        shader.SetVector("_EmitterMainColor", _emittersList[index].mainColor);
+        shader.SetVector("_EmitterSecondaryColor", _emittersList[index].secondaryColor);
+        shader.SetFloat("_EmitterSecondaryColorProbability", _emittersList[index].secondaryColorProbability);
 
         shader.SetBuffer(initParticlesKernel, "_ParticleBuffer", particleBuffers[index]);
 
@@ -249,6 +239,9 @@ public class PhysarumManager : MonoBehaviour
         shader.SetVector("_EmitterPosition", _emittersList[index].position);
         shader.SetFloat("_EmitterRadius", _emittersList[index].radius);
         shader.SetFloat("_EmitterSpawnRate", _emittersList[index].spawnRate);
+        shader.SetVector("_EmitterMainColor", _emittersList[index].mainColor);
+        shader.SetVector("_EmitterSecondaryColor", _emittersList[index].secondaryColor);
+        shader.SetFloat("_EmitterSecondaryColorProbability", _emittersList[index].secondaryColorProbability);
 
         shader.SetBuffer(spawnParticlesKernel, "_ParticleBuffer", particleBuffers[index]);
 
@@ -294,56 +287,12 @@ public class PhysarumManager : MonoBehaviour
 	void InitializeEmitters() {
 
         CreateEmittersList();
-        //CreateEmittersArray();
-        //CreateEmittersBuffer();
     }
 
     void CreateEmittersList() {
 
         _emittersList = new List<PhysarumEmitter>();
     }
-
-    //void CreateEmittersArray() {
-
-    //    _emittersArray = _emittersList.Count > 0 ? new Emitter[_emittersList.Count] : new Emitter[1];
-    //}
-
-    //void CreateEmittersBuffer() {
-
-    //    if (_emittersBuffer != null)
-    //        _emittersBuffer.Release();
-
-    //    _emittersBuffer = _emittersList.Count > 0 ? new ComputeBuffer(_emittersList.Count, _physarumEmitterStride) : new ComputeBuffer(1, _physarumEmitterStride);
-
-    //    UpdateEmittersBuffer();
-    //}
-
-    //void UpdateEmittersArray() {
-
-    //    if (_emittersArray.Length != _emittersList.Count)
-    //        CreateEmittersArray();
-
-    //    for (int i = 0; i < _emittersList.Count; i++) {
-    //        _emittersArray[i].position = _emittersList[i].position;
-    //        _emittersArray[i].radius = _emittersList[i].radius;
-    //        _emittersArray[i].spawnRate = _emittersList[i].spawnRate;
-    //    }
-    //}
-
-    //void UpdateEmittersBuffer() {
-
-    //    UpdateEmittersArray();
-
-    //    _emittersBuffer.SetData(_emittersArray);
-
-    //    shader.SetBuffer(spawnParticlesKernel, "_EmittersBuffer", _emittersBuffer);
-    //    shader.SetInt("_EmittersCount", _emittersList.Count);
-    //}
-
-    //void ReleaseEmittersBuffer() {
-
-    //    _emittersBuffer.Release();
-    //}
 
     public void AddEmitter(PhysarumEmitter emitter) {
 
@@ -352,7 +301,6 @@ public class PhysarumManager : MonoBehaviour
 
         _emittersList.Add(emitter);
 
-        //CreateEmittersBuffer();
         InitializeParticlesBuffer();
     }
 
@@ -360,7 +308,6 @@ public class PhysarumManager : MonoBehaviour
 
         _emittersList.Remove(emitter);
 
-        //CreateEmittersBuffer();
         InitializeParticlesBuffer();
     }
 

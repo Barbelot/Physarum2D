@@ -43,6 +43,9 @@ float2 _EmitterPosition;
 float _EmitterRadius;
 float _EmitterSpawnRate;
 int _EmitterCapacity;
+float4 _EmitterMainColor;
+float4 _EmitterSecondaryColor;
+float _EmitterSecondaryColorProbability;
 
 /**********************
 FUNCTIONS
@@ -77,7 +80,7 @@ void InitParticle(uint3 id) {
 
 	_ParticleBuffer[id.x].position = RandomInsideCircle(id.x + 45, _EmitterPosition, _EmitterRadius);
 	_ParticleBuffer[id.x].angle = Random(id.x + 2) * TWOPI;
-	_ParticleBuffer[id.x].color = Random(id.x + 288) < 0.5f ? float4(1, 0, 0, 1) : float4(1, 1, 1, 1);
+	_ParticleBuffer[id.x].color = Random(id.x + 288) < _EmitterSecondaryColorProbability ? _EmitterSecondaryColor : _EmitterMainColor;
 	_ParticleBuffer[id.x].lifetime = _Lifetime;
 	_ParticleBuffer[id.x].age = -1;
 }

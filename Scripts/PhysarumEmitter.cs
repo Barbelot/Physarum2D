@@ -12,9 +12,15 @@ public class PhysarumEmitter : MonoBehaviour
 
 	[Header("Physarum Emitter")]
 	public string behaviourID;
-	public float radius = 0.1f;
-	public float spawnRate = 1;
+	[Space]
 	public int capacity = 1000000;
+	public float spawnRate = 1;
+	[Space]
+	public float radius = 0.1f;
+	[Space]
+	public Color mainColor = Color.white;
+	public Color secondaryColor = Color.red;
+	[Range(0, 1)] public float secondaryColorProbability = 0.5f;
 
 	[Header("Gizmos")]
 	public bool showGizmos = true;
