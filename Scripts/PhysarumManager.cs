@@ -6,15 +6,18 @@ public class PhysarumManager : MonoBehaviour
     [Header("Behaviour ID")]
     public string ID;
 
+    [Header("Physarum Material")]
+    public Material physarumMaterial;
+
     [Header("Initial Values")]
-    [SerializeField] private int dimension = 256;
-    [SerializeField] private ComputeShader shader;
-    [SerializeField] private bool stimuliActive = true;
-    [SerializeField] private Texture Stimuli;
+    public int dimension = 256;
+    public ComputeShader shader;
+    public bool stimuliActive = true;
+    public Texture stimuli;
 
     [Header("Trail Parameters")]
     [Range(0f, 1f)] public float decay = 0.002f;
-    [Range(0f, 1f)] public float wProj = 0.1f;
+    public float stimuliIntensity = 0.1f;
 
     [Header("Particles Parameters")]
     public bool synchronizeSensorAndRotation = false;
@@ -113,6 +116,7 @@ public class PhysarumManager : MonoBehaviour
 
         InitializeTrail();
         InitializeStimuli();
+        InitializeMaterial();
         InitializeEmitters();
         InitializeParticlesBuffer();
 
@@ -154,9 +158,6 @@ public class PhysarumManager : MonoBehaviour
         trail.enableRandomWrite = true;
         trail.Create();
 
-        var rend = GetComponent<Renderer>();
-        rend.material.mainTexture = trail;
-
         shader.SetVector("_TrailDimension", Vector2.one * dimension);
 
         shader.SetTexture(moveParticlesKernel, "_TrailBuffer", trail);
@@ -177,7 +178,7 @@ public class PhysarumManager : MonoBehaviour
 
 	void InitializeStimuli()
     {
-        if (Stimuli == null)
+        if (stimuli == null)
         {
             RWStimuli = new RenderTexture(dimension, dimension, 24);
             RWStimuli.enableRandomWrite = true;
@@ -185,12 +186,13 @@ public class PhysarumManager : MonoBehaviour
         }
         else
         {
-            RWStimuli = new RenderTexture(Stimuli.width, Stimuli.height, 0);
+            RWStimuli = new RenderTexture(stimuli.width, stimuli.height, 0);
             RWStimuli.enableRandomWrite = true;
-            Graphics.Blit(Stimuli, RWStimuli);
+            Graphics.Blit(stimuli, RWStimuli);
         }
         shader.SetBool("_StimuliActive", stimuliActive);
-        shader.SetTexture(updateTrailKernel, "_Stimuli", RWStimuli);
+        shader.SetTexture(moveParticlesKernel, "_Stimuli", RWStimuli);
+        shader.SetVector("_StimuliDimension", new Vector2(RWStimuli.width, RWStimuli.height));
     }
 
     void InitializeParticlesBuffer() {
@@ -202,6 +204,12 @@ public class PhysarumManager : MonoBehaviour
         for (int i = 0; i < particleBuffers.Length; i++)
             InitializeParticles(i);
     }
+
+    void InitializeMaterial() {
+
+        physarumMaterial.SetTexture("PhysarumTrail", trail);
+        physarumMaterial.SetTexture("PhysarumStimuli", stimuli);
+	}
 
 	#endregion
 
@@ -257,6 +265,7 @@ public class PhysarumManager : MonoBehaviour
         shader.SetFloat("_RotationAngle", rotationAngle);
         shader.SetFloat("_SensorOffsetDistance", sensorOffsetDistance);
         shader.SetFloat("_StepSize", stepSize * Time.deltaTime);
+        shader.SetFloat("_StimuliIntensity", stimuliIntensity);
 
         shader.SetBuffer(moveParticlesKernel, "_ParticleBuffer", particleBuffers[index]);
 
@@ -266,7 +275,6 @@ public class PhysarumManager : MonoBehaviour
     void UpdateTrail()
     {
         shader.SetFloat("_Decay", decay);
-        shader.SetFloat("_WProj", wProj);
         shader.Dispatch(updateTrailKernel, dimension / _groupCount, dimension / _groupCount, 1);
     }
 

@@ -22,8 +22,10 @@ struct Particle
 
 float2 _TrailDimension;
 float _Decay;
-float _WProj;
+
 bool _StimuliActive;
+float2 _StimuliDimension;
+float _StimuliIntensity;
 
 float _SensorAngle;
 float _RotationAngle;
@@ -87,7 +89,14 @@ void InitParticle(uint3 id) {
 
 float ReadTrail(float2 pos) {
 
-	return _TrailBuffer[pos * _TrailDimension.xy].w;
+	float value = _TrailBuffer[pos * _TrailDimension.xy].w;
+
+	if (_StimuliActive) {
+		//value.rgb += _Stimuli[id.xy].rgb * _WProj;
+		value += (0.299 * _Stimuli[pos * _StimuliDimension.xy].x + 0.587 * _Stimuli[pos * _StimuliDimension.xy].y + 0.114 * _Stimuli[pos * _StimuliDimension.xy].z) * _StimuliIntensity;
+	}
+
+	return value;
 }
 
 /**********************
@@ -187,18 +196,10 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 [numthreads(NUM_THREADS, NUM_THREADS,1)]
 void UpdateTrail (uint3 id : SV_DISPATCHTHREADID)
 {
-	float4 value;
-	if(_StimuliActive)
-	{
-		value = _TrailBuffer[id.xy] + (_Stimuli[id.xy] * _WProj);
-	}
-	else
-	{
-		value = _TrailBuffer[id.xy];
-	}
+	float4 value = _TrailBuffer[id.xy];
 	
 	float3 d = float3(1, -1, 0.0);
-	
+
 	//mean filter
 	value = value;
 	value += _TrailBuffer[id.xy - d.xx]; // -1,-1
