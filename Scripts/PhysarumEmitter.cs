@@ -21,7 +21,7 @@ public class PhysarumEmitter : MonoBehaviour
 
 	[HideInInspector] public Vector2 position = Vector2.zero;
 
-	private PhysarumBehaviour _physarumBehaviour;
+	private PhysarumManager _physarumManager;
 
 	private void OnEnable() {
 
@@ -51,14 +51,14 @@ public class PhysarumEmitter : MonoBehaviour
 
 	void AddEmitter() {
 
-		foreach (var behaviour in FindObjectsOfType<PhysarumBehaviour>()) {
+		foreach (var behaviour in FindObjectsOfType<PhysarumManager>()) {
 			if (behaviour.ID == behaviourID) {
-				_physarumBehaviour = behaviour; break;
+				_physarumManager = behaviour; break;
 			}
 		}
 
-		if (_physarumBehaviour)
-			_physarumBehaviour.AddEmitter(this);
+		if (_physarumManager)
+			_physarumManager.AddEmitter(this);
 	}
 
 	void UpdateEmitter() {
@@ -81,7 +81,7 @@ public class PhysarumEmitter : MonoBehaviour
 
 	void RemoveEmitter() {
 
-		if (_physarumBehaviour)
-			_physarumBehaviour.RemoveEmitter(this);
+		if (_physarumManager)
+			_physarumManager.RemoveEmitter(this);
 	}
 }

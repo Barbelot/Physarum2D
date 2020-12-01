@@ -14,8 +14,16 @@ uint Hash(uint s) {
 	return s;
 }
 
+// https://www.pcg-random.org/
+uint pcg(uint v)
+{
+	uint state = v * 747796405u + 2891336453u;
+	uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+	return (word >> 22u) ^ word;
+}
+
 float Random(uint seed) {
-	return float(Hash(seed)) / 4294967295.0; // 2^32-1
+	return float(pcg(seed)) / 4294967295.0; // 2^32-1
 }
 
 float nrand(float2 co){

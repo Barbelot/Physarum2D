@@ -75,9 +75,9 @@ float2 RandomInsideCircle(uint seed, float2 center, float radius) {
 
 void InitParticle(uint3 id) {
 
-	_ParticleBuffer[id.x].position = RandomInsideCircle(id.x, _EmitterPosition, _EmitterRadius);
+	_ParticleBuffer[id.x].position = RandomInsideCircle(id.x + 45, _EmitterPosition, _EmitterRadius);
 	_ParticleBuffer[id.x].angle = Random(id.x + 2) * TWOPI;
-	_ParticleBuffer[id.x].color = float4(1, 1, 1, 1);
+	_ParticleBuffer[id.x].color = Random(id.x + 288) < 0.5f ? float4(1, 0, 0, 1) : float4(1, 1, 1, 1);
 	_ParticleBuffer[id.x].lifetime = _Lifetime;
 	_ParticleBuffer[id.x].age = -1;
 }
@@ -100,6 +100,7 @@ void InitParticles(uint3 id: SV_DISPATCHTHREADID)
 [numthreads(NUM_THREADS, 1, 1)]
 void SpawnParticles(uint3 id: SV_DISPATCHTHREADID)
 {
+
 	//Spawn
 	if (_ParticleBuffer[id.x].age < 0 && Random(id.x + _AbsoluteTime * 1000) < _EmitterSpawnRate * _DeltaTime / _EmitterCapacity) {
 		InitParticle(id);
@@ -121,15 +122,17 @@ void SpawnParticles(uint3 id: SV_DISPATCHTHREADID)
 [numthreads(NUM_THREADS,1,1)]
 void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 {
+
 	if (_ParticleBuffer[id.x].age < 0)
 		return;
 
 	float angle = _ParticleBuffer[id.x].angle;
 	float2 pos 	= _ParticleBuffer[id.x].position;
 
-	float2 frontPos 		= pos + float2(cos(angle) * _SensorOffsetDistance, sin(angle) * _SensorOffsetDistance);
-	float2 frontLeftPos 	= pos + float2(cos(angle + _SensorAngle) * _SensorOffsetDistance, sin(angle + _SensorAngle) * _SensorOffsetDistance);
-	float2 frontRightPos 	= pos + float2(cos(angle - _SensorAngle) * _SensorOffsetDistance, sin(angle - _SensorAngle) * _SensorOffsetDistance);
+	float offset = Random(id.x + 465) * _SensorOffsetDistance;
+	float2 frontPos 		= pos + float2(cos(angle), sin(angle)) * offset;
+	float2 frontLeftPos 	= pos + float2(cos(angle + _SensorAngle), sin(angle + _SensorAngle)) * offset;
+	float2 frontRightPos 	= pos + float2(cos(angle - _SensorAngle), sin(angle - _SensorAngle)) * offset;
 	
 	float F 	= ReadTrail(frontPos);
 	float FL 	= ReadTrail(frontLeftPos);
@@ -142,7 +145,7 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	}
 	else if	((F < FL) && (F < FR))
 	{	
-		angle = angle + _RotationAngle * randomSign(id.x);
+		angle = angle + _RotationAngle * randomSign(id.x + 369);
 
 		//if (FL > FR) {
 		//	angle += rotationAngle;
@@ -164,7 +167,7 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 
 	//check if nextPos is within the boundries
 	//float t1 = insideCircle(nextPos, float2(0.5, 0.5), 0.5);
-	//angle = angle + rotationAngle * randomSign(id.x+1) * (t1-1);
+	//angle = angle + _RotationAngle * randomSign(id.x+7129) * (t1-1);
 	//nextPos = saturate(nextPos*t1 + pos*(1-t1));
 
 	_ParticleBuffer[id.x].position = nextPos;
@@ -172,7 +175,7 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	//if the particle moved, leave a mark in the trail buffer
 	if(distance(nextPos, pos) > 0.0001)
 	{
-		_TrailBuffer[nextPos * _TrailDimension.xy] += _ParticleBuffer[id.x].color;
+		_TrailBuffer[nextPos * _TrailDimension.xy] += _ParticleBuffer[id.x].color;// *_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime;
 	}
 	
 	_ParticleBuffer[id.x].angle = angle;
@@ -207,8 +210,6 @@ void UpdateTrail (uint3 id : SV_DISPATCHTHREADID)
 	value = (value / 9) * (1-_Decay);
 
 	_TrailBuffer[id.xy] = value;
-
-	//_TrailBuffer[id.xy] = Random(id.x + _AbsoluteTime * 10000) * float4(1, 1, 1, 1);
 }
 
 [numthreads(NUM_THREADS, NUM_THREADS, 1)]
@@ -220,6 +221,7 @@ void CleanParticleTexture(uint3 id : SV_DISPATCHTHREADID)
 [numthreads(NUM_THREADS, 1, 1)]
 void WriteParticleTexture(uint3 id : SV_DISPATCHTHREADID)
 {
-	_ParticleTexture[_ParticleBuffer[id.x].position * _TrailDimension.xy] = float4(1, 1, 1, 1) * _ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime;
+	if(_ParticleBuffer[id.x].age >= 0)
+		_ParticleTexture[_ParticleBuffer[id.x].position * _TrailDimension.xy] = float4(1, 1, 1, 1) * (1.0f - _ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime);
 }
 

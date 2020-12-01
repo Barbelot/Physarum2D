@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 
-public class PhysarumBehaviour : MonoBehaviour
+public class PhysarumManager : MonoBehaviour
 {
     [Header("Behaviour ID")]
     public string ID;
@@ -215,7 +215,7 @@ public class PhysarumBehaviour : MonoBehaviour
 
 	#endregion
 
-	#region Release
+	#region Releases
 
 	void ReleaseParticlesBuffer() {
 
@@ -263,7 +263,7 @@ public class PhysarumBehaviour : MonoBehaviour
         shader.SetFloat("_SensorAngle", sensorAngle);
         shader.SetFloat("_RotationAngle", rotationAngle);
         shader.SetFloat("_SensorOffsetDistance", sensorOffsetDistance);
-        shader.SetFloat("_StepSize", stepSize);
+        shader.SetFloat("_StepSize", stepSize * Time.deltaTime);
 
         shader.SetBuffer(moveParticlesKernel, "_ParticleBuffer", particleBuffers[index]);
 
