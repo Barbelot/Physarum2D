@@ -31,7 +31,7 @@ float _SensorAngle;
 float _RotationAngle;
 float _SensorOffsetDistance;
 float _StepSize;
-float _Lifetime;
+float2 _LifetimeMinMax;
 
 float _DeltaTime;
 float _AbsoluteTime;
@@ -83,7 +83,7 @@ void InitParticle(uint3 id) {
 	_ParticleBuffer[id.x].position = RandomInsideCircle(id.x + 45, _EmitterPosition, _EmitterRadius);
 	_ParticleBuffer[id.x].angle = Random(id.x + 2) * TWOPI;
 	_ParticleBuffer[id.x].color = Random(id.x + 288) < _EmitterSecondaryColorProbability ? _EmitterSecondaryColor : _EmitterMainColor;
-	_ParticleBuffer[id.x].lifetime = _Lifetime;
+	_ParticleBuffer[id.x].lifetime = Random(id.x + 781) * (_LifetimeMinMax.y - _LifetimeMinMax.x) + _LifetimeMinMax.x;
 	_ParticleBuffer[id.x].age = -1;
 }
 

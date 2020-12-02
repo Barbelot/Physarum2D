@@ -10,10 +10,13 @@ public class PhysarumManager : MonoBehaviour
     public Material physarumMaterial;
 
     [Header("Initial Values")]
-    public int dimension = 256;
+    public Vector2Int dimensions = Vector2Int.one * 2048;
     public ComputeShader shader;
     public bool stimuliActive = true;
     public Texture stimuli;
+
+    [Header("Updates")]
+    [Range(0, 10)] public int updatesPerFrame = 1;
 
     [Header("Trail Parameters")]
     [Range(0f, 1f)] public float decay = 0.002f;
@@ -25,7 +28,7 @@ public class PhysarumManager : MonoBehaviour
     [Range(-180f, 180f)] public float rotationAngleDegrees = 45f;//in degrees
     [Range(0f, 1f)] public float sensorOffsetDistance = 0.01f;
     [Range(0f, 1f)] public float stepSize = 0.001f;
-    public float lifetime = 0;
+    public Vector2 lifetimeMinMax = Vector2.one;
 
     [Header("Debug")]
     public bool debugParticles = false;
@@ -68,7 +71,8 @@ public class PhysarumManager : MonoBehaviour
 
 	void OnValidate()
     {
-        if (dimension < _groupCount) dimension = _groupCount;
+        if (dimensions.x < _groupCount) dimensions.x = _groupCount;
+        if (dimensions.y < _groupCount) dimensions.y = _groupCount;
     }
 
     void OnEnable()
@@ -82,9 +86,10 @@ public class PhysarumManager : MonoBehaviour
         if (synchronizeSensorAndRotation)
             rotationAngleDegrees = sensorAngleDegrees;
 
-        //UpdateEmittersBuffer();
-        UpdateParticles();
-        UpdateTrail();
+        for (int i = 0; i < updatesPerFrame; i++) {
+            UpdateParticles();
+            UpdateTrail();
+        }
 
         if (debugParticles)
             UpdateParticleTexture();
@@ -92,7 +97,6 @@ public class PhysarumManager : MonoBehaviour
 
     void OnDisable() {
         ReleaseParticlesBuffer();
-        //ReleaseEmittersBuffer();
     }
 
 	#endregion
@@ -137,7 +141,7 @@ public class PhysarumManager : MonoBehaviour
         particleBuffers[index] = new ComputeBuffer(data.Length, _particleStride);
         particleBuffers[index].SetData(data);
 
-        shader.SetFloat("_Lifetime", lifetime);
+        shader.SetVector("_LifetimeMinMax", lifetimeMinMax);
 
         shader.SetInt("_EmitterCapacity", _emittersList[index].capacity);
         shader.SetVector("_EmitterPosition", _emittersList[index].position);
@@ -154,18 +158,18 @@ public class PhysarumManager : MonoBehaviour
 
     void InitializeTrail()
     {
-        trail = new RenderTexture(dimension, dimension, 24);
+        trail = new RenderTexture(dimensions.x, dimensions.y, 24);
         trail.enableRandomWrite = true;
         trail.Create();
 
-        shader.SetVector("_TrailDimension", Vector2.one * dimension);
+        shader.SetVector("_TrailDimension", new Vector2(dimensions.x, dimensions.y));
 
         shader.SetTexture(moveParticlesKernel, "_TrailBuffer", trail);
         shader.SetTexture(updateTrailKernel, "_TrailBuffer", trail);
     }
 
 	void InitializeParticleTexture() {
-		particleTexture = new RenderTexture(dimension, dimension, 24);
+		particleTexture = new RenderTexture(dimensions.x, dimensions.y, 24);
 		particleTexture.enableRandomWrite = true;
 		particleTexture.Create();
 
@@ -180,7 +184,7 @@ public class PhysarumManager : MonoBehaviour
     {
         if (stimuli == null)
         {
-            RWStimuli = new RenderTexture(dimension, dimension, 24);
+            RWStimuli = new RenderTexture(dimensions.x, dimensions.y, 24);
             RWStimuli.enableRandomWrite = true;
             RWStimuli.Create();
         }
@@ -275,12 +279,12 @@ public class PhysarumManager : MonoBehaviour
     void UpdateTrail()
     {
         shader.SetFloat("_Decay", decay);
-        shader.Dispatch(updateTrailKernel, dimension / _groupCount, dimension / _groupCount, 1);
+        shader.Dispatch(updateTrailKernel, dimensions.x / _groupCount, dimensions.y / _groupCount, 1);
     }
 
     void UpdateParticleTexture() {
 
-        shader.Dispatch(cleanParticleTexture, dimension / _groupCount, dimension / _groupCount, 1);
+        shader.Dispatch(cleanParticleTexture, dimensions.x / _groupCount, dimensions.y / _groupCount, 1);
 
         for (int i = 0; i < particleBuffers.Length; i++) {
             shader.SetBuffer(writeParticleTexture, "_ParticleBuffer", particleBuffers[i]);
