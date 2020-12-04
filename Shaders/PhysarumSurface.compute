@@ -21,6 +21,7 @@ struct Particle
 };
 
 float2 _TrailDimension;
+float2 _TrailSize;
 float _Decay;
 
 bool _StimuliActive;
@@ -42,6 +43,7 @@ RWTexture2D<float4> _Stimuli;
 RWTexture2D<float4> _ParticleTexture;
 
 float2 _EmitterPosition;
+float2 _EmitterPreviousPosition;
 float _EmitterRadius;
 float _EmitterSpawnRate;
 int _EmitterCapacity;
@@ -80,20 +82,25 @@ float2 RandomInsideCircle(uint seed, float2 center, float radius) {
 
 void InitParticle(uint3 id) {
 
-	_ParticleBuffer[id.x].position = RandomInsideCircle(id.x + 45, _EmitterPosition, _EmitterRadius);
+	_ParticleBuffer[id.x].position = RandomInsideCircle(id.x + 45, lerp(_EmitterPreviousPosition, _EmitterPosition, Random(id.x + 912)), _EmitterRadius);
 	_ParticleBuffer[id.x].angle = Random(id.x + 2) * TWOPI;
 	_ParticleBuffer[id.x].color = Random(id.x + 288) < _EmitterSecondaryColorProbability ? _EmitterSecondaryColor : _EmitterMainColor;
 	_ParticleBuffer[id.x].lifetime = Random(id.x + 781) * (_LifetimeMinMax.y - _LifetimeMinMax.x) + _LifetimeMinMax.x;
 	_ParticleBuffer[id.x].age = -1;
 }
 
+float2 GetUVFromPosition(float2 pos) {
+	return pos / _TrailSize + float2(0.5, 0.5);
+}
+
 float ReadTrail(float2 pos) {
 
-	float value = _TrailBuffer[pos * _TrailDimension.xy].w;
+	float2 posUV = GetUVFromPosition(pos);
+	float value = _TrailBuffer[posUV * _TrailDimension.xy].w;
 
 	if (_StimuliActive) {
 		//value.rgb += _Stimuli[id.xy].rgb * _WProj;
-		value += (0.299 * _Stimuli[pos * _StimuliDimension.xy].x + 0.587 * _Stimuli[pos * _StimuliDimension.xy].y + 0.114 * _Stimuli[pos * _StimuliDimension.xy].z) * _StimuliIntensity;
+		value += (0.299 * _Stimuli[posUV * _StimuliDimension.xy].x + 0.587 * _Stimuli[posUV * _StimuliDimension.xy].y + 0.114 * _Stimuli[posUV * _StimuliDimension.xy].z) * _StimuliIntensity;
 	}
 
 	return value;
@@ -134,7 +141,6 @@ void SpawnParticles(uint3 id: SV_DISPATCHTHREADID)
 [numthreads(NUM_THREADS,1,1)]
 void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 {
-
 	if (_ParticleBuffer[id.x].age < 0)
 		return;
 
@@ -175,7 +181,7 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 		angle += _RotationAngle; 
 	}
 
-	float2 nextPos = pos + float2(cos(angle) *_StepSize, sin(angle) *_StepSize);
+	float2 nextPos = pos + float2(cos(angle), sin(angle)) * _StepSize;
 
 	//check if nextPos is within the boundries
 	//float t1 = insideCircle(nextPos, float2(0.5, 0.5), 0.5);
@@ -187,7 +193,7 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	//if the particle moved, leave a mark in the trail buffer
 	if(distance(nextPos, pos) > 0.0001)
 	{
-		_TrailBuffer[nextPos * _TrailDimension.xy] += _ParticleBuffer[id.x].color;// *_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime;
+		_TrailBuffer[GetUVFromPosition(nextPos) * _TrailDimension.xy] += _ParticleBuffer[id.x].color;// *_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime;
 	}
 	
 	_ParticleBuffer[id.x].angle = angle;
@@ -226,6 +232,6 @@ void CleanParticleTexture(uint3 id : SV_DISPATCHTHREADID)
 void WriteParticleTexture(uint3 id : SV_DISPATCHTHREADID)
 {
 	if(_ParticleBuffer[id.x].age >= 0)
-		_ParticleTexture[_ParticleBuffer[id.x].position * _TrailDimension.xy] = float4(1, 1, 1, 1) * (1.0f - _ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime);
+		_ParticleTexture[GetUVFromPosition(_ParticleBuffer[id.x].position) * _TrailDimension.xy] = float4(1, 1, 1, 1) * (1.0f - _ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime);
 }
 

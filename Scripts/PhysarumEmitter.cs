@@ -7,8 +7,8 @@ public class PhysarumEmitter : MonoBehaviour
 	public enum PositionMapping { XY, XZ, YZ }
 	[Header("Position Mapping")]
 	public PositionMapping positionMapping = PositionMapping.XY;
-	[Tooltip("Size of your physarum area in meters.")] public Vector2 size = Vector2.one;
-	[Tooltip("Is your emitter centered on its origin ?")] public bool isCentered = false;
+	//[Tooltip("Size of your physarum area in meters.")] public Vector2 size = Vector2.one;
+	//[Tooltip("Is your emitter centered on its origin ?")] public bool isCentered = false;
 
 	[Header("Physarum Emitter")]
 	public string behaviourID;
@@ -26,6 +26,7 @@ public class PhysarumEmitter : MonoBehaviour
 	public bool showGizmos = true;
 
 	[HideInInspector] public Vector2 position = Vector2.zero;
+	[HideInInspector] public Vector2 previousPosition = Vector2.zero;
 
 	private PhysarumManager _physarumManager;
 
@@ -69,18 +70,20 @@ public class PhysarumEmitter : MonoBehaviour
 
 	void UpdateEmitter() {
 
+		previousPosition = position;
+
 		switch (positionMapping) {
 			case PositionMapping.XY:
-				position.x = isCentered ? transform.position.x / size.x + 0.5f : transform.position.x / size.x;
-				position.y = isCentered ? transform.position.y / size.y + 0.5f : transform.position.y / size.y;
+				position.x = transform.position.x;
+				position.y = transform.position.y;
 				break;
 			case PositionMapping.XZ:
-				position.x = isCentered ? transform.position.x / size.x + 0.5f : transform.position.x / size.x;
-				position.y = isCentered ? transform.position.z / size.y + 0.5f : transform.position.z / size.y;
+				position.x = transform.position.x;
+				position.y = transform.position.z;
 				break;
 			case PositionMapping.YZ:
-				position.x = isCentered ? transform.position.y / size.x + 0.5f : transform.position.y / size.x;
-				position.y = isCentered ? transform.position.z / size.y + 0.5f : transform.position.z / size.y;
+				position.x = transform.position.y;
+				position.y = transform.position.z;
 				break;
 		}
 	}

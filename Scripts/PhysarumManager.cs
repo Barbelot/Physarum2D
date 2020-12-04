@@ -9,9 +9,12 @@ public class PhysarumManager : MonoBehaviour
     [Header("Physarum Material")]
     public Material physarumMaterial;
 
-    [Header("Initial Values")]
-    public Vector2Int dimensions = Vector2Int.one * 2048;
+    [Header("Compute shader")]
     public ComputeShader shader;
+
+    [Header("Initial Values")]
+    public Vector2Int trailResolution = Vector2Int.one * 2048;
+    public Vector2 trailSize = Vector2.one;
     public bool stimuliActive = true;
     public Texture stimuli;
 
@@ -71,8 +74,8 @@ public class PhysarumManager : MonoBehaviour
 
 	void OnValidate()
     {
-        if (dimensions.x < _groupCount) dimensions.x = _groupCount;
-        if (dimensions.y < _groupCount) dimensions.y = _groupCount;
+        if (trailResolution.x < _groupCount) trailResolution.x = _groupCount;
+        if (trailResolution.y < _groupCount) trailResolution.y = _groupCount;
     }
 
     void OnEnable()
@@ -145,12 +148,12 @@ public class PhysarumManager : MonoBehaviour
 
         shader.SetInt("_EmitterCapacity", _emittersList[index].capacity);
         shader.SetVector("_EmitterPosition", _emittersList[index].position);
+        shader.SetVector("_EmitterPreviousPosition", _emittersList[index].previousPosition);
         shader.SetFloat("_EmitterRadius", _emittersList[index].radius);
         shader.SetFloat("_EmitterSpawnRate", _emittersList[index].spawnRate);
         shader.SetVector("_EmitterMainColor", _emittersList[index].mainColor);
         shader.SetVector("_EmitterSecondaryColor", _emittersList[index].secondaryColor);
         shader.SetFloat("_EmitterSecondaryColorProbability", _emittersList[index].secondaryColorProbability);
-
         shader.SetBuffer(initParticlesKernel, "_ParticleBuffer", particleBuffers[index]);
 
         shader.Dispatch(initParticlesKernel, _emittersList[index].capacity / _groupCount, 1, 1);
@@ -158,18 +161,19 @@ public class PhysarumManager : MonoBehaviour
 
     void InitializeTrail()
     {
-        trail = new RenderTexture(dimensions.x, dimensions.y, 24);
+        trail = new RenderTexture(trailResolution.x, trailResolution.y, 24);
         trail.enableRandomWrite = true;
         trail.Create();
 
-        shader.SetVector("_TrailDimension", new Vector2(dimensions.x, dimensions.y));
+        shader.SetVector("_TrailDimension", new Vector2(trailResolution.x, trailResolution.y));
+        shader.SetVector("_TrailSize", trailSize);
 
         shader.SetTexture(moveParticlesKernel, "_TrailBuffer", trail);
         shader.SetTexture(updateTrailKernel, "_TrailBuffer", trail);
     }
 
 	void InitializeParticleTexture() {
-		particleTexture = new RenderTexture(dimensions.x, dimensions.y, 24);
+		particleTexture = new RenderTexture(trailResolution.x, trailResolution.y, 24);
 		particleTexture.enableRandomWrite = true;
 		particleTexture.Create();
 
@@ -184,7 +188,7 @@ public class PhysarumManager : MonoBehaviour
     {
         if (stimuli == null)
         {
-            RWStimuli = new RenderTexture(dimensions.x, dimensions.y, 24);
+            RWStimuli = new RenderTexture(trailResolution.x, trailResolution.y, 24);
             RWStimuli.enableRandomWrite = true;
             RWStimuli.Create();
         }
@@ -249,6 +253,7 @@ public class PhysarumManager : MonoBehaviour
 
         shader.SetInt("_EmitterCapacity", _emittersList[index].capacity);
         shader.SetVector("_EmitterPosition", _emittersList[index].position);
+        shader.SetVector("_EmitterPreviousPosition", _emittersList[index].previousPosition);
         shader.SetFloat("_EmitterRadius", _emittersList[index].radius);
         shader.SetFloat("_EmitterSpawnRate", _emittersList[index].spawnRate);
         shader.SetVector("_EmitterMainColor", _emittersList[index].mainColor);
@@ -279,12 +284,12 @@ public class PhysarumManager : MonoBehaviour
     void UpdateTrail()
     {
         shader.SetFloat("_Decay", decay);
-        shader.Dispatch(updateTrailKernel, dimensions.x / _groupCount, dimensions.y / _groupCount, 1);
+        shader.Dispatch(updateTrailKernel, trailResolution.x / _groupCount, trailResolution.y / _groupCount, 1);
     }
 
     void UpdateParticleTexture() {
 
-        shader.Dispatch(cleanParticleTexture, dimensions.x / _groupCount, dimensions.y / _groupCount, 1);
+        shader.Dispatch(cleanParticleTexture, trailResolution.x / _groupCount, trailResolution.y / _groupCount, 1);
 
         for (int i = 0; i < particleBuffers.Length; i++) {
             shader.SetBuffer(writeParticleTexture, "_ParticleBuffer", particleBuffers[i]);
