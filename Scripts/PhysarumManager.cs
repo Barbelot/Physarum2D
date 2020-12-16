@@ -33,12 +33,6 @@ public class PhysarumManager : MonoBehaviour
     public bool colorFromStimuli = false;
 
     [Header("Particles Parameters")]
-    public bool synchronizeSensorAndRotation = false;
-    [Range(-180f, 180f)] public float sensorAngleDegrees = 45f; 	//in degrees
-    [Range(-180f, 180f)] public float rotationAngleDegrees = 45f;//in degrees
-    [Range(0f, 1f)] public float sensorOffsetDistance = 0.01f;
-    [Range(0f, 1f)] public float stepSize = 0.001f;
-    public Vector2 lifetimeMinMax = Vector2.one;
     [Range(-180f, 180f)] public float gravityAngle;
     public float gravityStrength = 0;
     [Range(0, 360f)] public float directionAngle;
@@ -49,8 +43,6 @@ public class PhysarumManager : MonoBehaviour
 
     private List<PhysarumEmitter> _emittersList;
 
-    private float sensorAngle; 				//in radians
-    private float rotationAngle;   			//in radians
     private RenderTexture trail;
     private RenderTexture RWStimuli;
     private RenderTexture particleTexture;
@@ -100,9 +92,6 @@ public class PhysarumManager : MonoBehaviour
     }
 
     void Update() {
-
-        if (synchronizeSensorAndRotation)
-            rotationAngleDegrees = sensorAngleDegrees;
 
         for (int i = 0; i < updatesPerFrame; i++) {
             UpdateParticles();
@@ -169,8 +158,7 @@ public class PhysarumManager : MonoBehaviour
         particleBuffers[index] = new ComputeBuffer(data.Length, _particleStride);
         particleBuffers[index].SetData(data);
 
-        shader.SetVector("_LifetimeMinMax", lifetimeMinMax);
-
+        shader.SetVector("_EmitterLifetimeMinMax", _emittersList[index].lifetimeMinMax);
         shader.SetInt("_EmitterCapacity", _emittersList[index].capacity);
         shader.SetVector("_EmitterPosition", _emittersList[index].position);
         shader.SetVector("_EmitterPreviousPosition", _emittersList[index].previousPosition);
@@ -318,13 +306,10 @@ public class PhysarumManager : MonoBehaviour
 
     void MoveParticles(int index) {
 
-        sensorAngle = sensorAngleDegrees * 0.0174533f;
-        rotationAngle = rotationAngleDegrees * 0.0174533f;
-
-        shader.SetFloat("_SensorAngle", sensorAngle);
-        shader.SetFloat("_RotationAngle", rotationAngle);
-        shader.SetFloat("_SensorOffsetDistance", sensorOffsetDistance);
-        shader.SetFloat("_StepSize", stepSize * Time.deltaTime);
+        shader.SetFloat("_EmitterSensorAngle", _emittersList[index].sensorAngleDegrees * Mathf.Deg2Rad);
+        //shader.SetFloat("_RotationAngle", rotationAngle);
+        shader.SetFloat("_EmitterSensorOffsetDistance", _emittersList[index].sensorOffsetDistance);
+        shader.SetFloat("_EmitterStepSize", _emittersList[index].stepSize * Time.deltaTime);
         shader.SetBool("_StimuliActive", stimuliActive);
         shader.SetFloat("_StimuliIntensity", stimuliIntensity);
         shader.SetBool("_StimuliToColor", colorFromStimuli);

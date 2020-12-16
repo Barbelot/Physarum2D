@@ -31,13 +31,6 @@ float2 _StimuliDimension;
 float _StimuliIntensity;
 bool _StimuliToColor;
 
-
-float _SensorAngle;
-float _RotationAngle;
-float _SensorOffsetDistance;
-float _StepSize;
-float2 _LifetimeMinMax;
-
 float _DeltaTime;
 float _AbsoluteTime;
 
@@ -55,6 +48,12 @@ int _EmitterCapacity;
 float4 _EmitterMainColor;
 float4 _EmitterSecondaryColor;
 float _EmitterSecondaryColorProbability;
+float2 _EmitterLifetimeMinMax;
+
+float _EmitterSensorAngle;
+//float _EmitterRotationAngle;
+float _EmitterSensorOffsetDistance;
+float _EmitterStepSize;
 
 float2 _ParticlePositionMapSize;
 
@@ -97,7 +96,7 @@ void InitParticle(uint3 id) {
 	_ParticleBuffer[id.x].position = RandomInsideCircle(id.x + 45, lerp(_EmitterPreviousPosition, _EmitterPosition, Random(id.x + 912)), _EmitterRadius);
 	_ParticleBuffer[id.x].angle = Random(id.x + 2) * TWOPI;
 	_ParticleBuffer[id.x].color = Random(id.x + 288) < _EmitterSecondaryColorProbability ? _EmitterSecondaryColor : _EmitterMainColor;
-	_ParticleBuffer[id.x].lifetime = Random(id.x + 781) * (_LifetimeMinMax.y - _LifetimeMinMax.x) + _LifetimeMinMax.x;
+	_ParticleBuffer[id.x].lifetime = Random(id.x + 781)* (_EmitterLifetimeMinMax.y - _EmitterLifetimeMinMax.x) + _EmitterLifetimeMinMax.x;
 	_ParticleBuffer[id.x].age = -1;
 	_ParticleBuffer[id.x].stimuliIntensity = 0;
 }
@@ -179,10 +178,10 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	float angle = _ParticleBuffer[id.x].angle;
 	float2 pos 	= _ParticleBuffer[id.x].position;
 
-	float offset = Random(id.x + 465) * _SensorOffsetDistance;
+	float offset = Random(id.x + 465) * _EmitterSensorOffsetDistance;
 
-	float sensorAngle = _SensorAngle;// *_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime;
-	float rotationAngle = _RotationAngle;// *_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime;
+	float sensorAngle = _EmitterSensorAngle;// *_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime;
+	float rotationAngle = _EmitterSensorAngle;// *_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime;
 
 	float2 frontPos 		= pos + float2(cos(angle), sin(angle)) * offset;
 	float2 frontLeftPos 	= pos + float2(cos(angle + sensorAngle), sin(angle + sensorAngle)) * offset;
@@ -217,7 +216,7 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 		angle += rotationAngle;
 	}
 
-	float2 nextPos = pos + float2(cos(angle), sin(angle)) * _StepSize;
+	float2 nextPos = pos + float2(cos(angle), sin(angle)) * _EmitterStepSize;
 
 	//check if nextPos is within the boundries
 	//float t1 = insideCircle(nextPos, float2(0.5, 0.5), 0.5);
@@ -229,7 +228,7 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	//if the particle moved, leave a mark in the trail buffer
 	if(distance(nextPos, pos) > 0.0001)
 	{
-		_TrailBuffer[GetUVFromPosition(nextPos) * _TrailDimension.xy] += _ParticleBuffer[id.x].color;// *_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime;
+		_TrailBuffer[GetUVFromPosition(nextPos) * _TrailDimension.xy] += _ParticleBuffer[id.x].color;
 	}
 	
 	_ParticleBuffer[id.x].angle = angle;

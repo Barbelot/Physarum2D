@@ -15,12 +15,18 @@ public class PhysarumEmitter : MonoBehaviour
 	[Space]
 	public int capacity = 1000000;
 	public float spawnRate = 1;
+	public Vector2 lifetimeMinMax;
 	[Space]
 	public float radius = 0.1f;
 	[Space]
 	public Color mainColor = Color.white;
 	public Color secondaryColor = Color.red;
 	[Range(0, 1)] public float secondaryColorProbability = 0.5f;
+	[Space]
+	[Range(-180f, 180f)] public float sensorAngleDegrees = 45f;     //in degrees
+	//[Range(-180f, 180f)] public float rotationAngleDegrees = 45f;//in degrees
+	[Range(0f, 1f)] public float sensorOffsetDistance = 0.01f;
+	[Range(0f, 1f)] public float stepSize = 0.001f;
 
 	[Header("Gizmos")]
 	public bool showGizmos = true;
