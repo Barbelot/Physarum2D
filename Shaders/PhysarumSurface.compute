@@ -62,6 +62,12 @@ float2 _Gravity;
 float _DirectionAngle;
 float _DirectionStrength;
 
+Texture2D<float4> _FluidTexture;
+float2 _FluidDimension;
+float _FluidStrength;
+
+SamplerState linearClampSampler;
+
 /**********************
 FUNCTIONS
 **********************/
@@ -126,6 +132,11 @@ float ReadTrail(float2 pos) {
 	return value;
 }
 
+float4 ReadFluid(float2 pos) {
+
+	return _FluidTexture.SampleLevel(linearClampSampler, GetUVFromPosition(pos), 0);
+}
+
 float AngleDifference(float angle1, float angle2) {
 
 	float diff = abs(angle1 - angle2);
@@ -187,9 +198,12 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	float2 frontLeftPos 	= pos + float2(cos(angle + sensorAngle), sin(angle + sensorAngle)) * offset;
 	float2 frontRightPos 	= pos + float2(cos(angle - sensorAngle), sin(angle - sensorAngle)) * offset;
 	
-	float F 	= ReadTrail(frontPos) + (PI - AngleDifference(angle, _DirectionAngle)) * _DirectionStrength;
-	float FL 	= ReadTrail(frontLeftPos) + (PI - AngleDifference(angle + sensorAngle, _DirectionAngle)) * _DirectionStrength;
-	float FR 	= ReadTrail(frontRightPos) + (PI - AngleDifference(angle - sensorAngle, _DirectionAngle)) * _DirectionStrength;
+	float2 fluidDirection = ReadFluid(pos).xy;
+	float fluidAngle = PI + atan(fluidDirection.y / fluidDirection.x);
+
+	float F 	= ReadTrail(frontPos) + (PI - AngleDifference(angle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle, fluidAngle)) * _FluidStrength;
+	float FL 	= ReadTrail(frontLeftPos) + (PI - AngleDifference(angle + sensorAngle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle + sensorAngle, fluidAngle)) * _FluidStrength;
+	float FR 	= ReadTrail(frontRightPos) + (PI - AngleDifference(angle - sensorAngle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle - sensorAngle, fluidAngle)) * _FluidStrength;
 
 	//decide on the next best step
 	if((F > FL) && (F > FR))

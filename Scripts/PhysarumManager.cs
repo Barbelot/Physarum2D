@@ -18,6 +18,10 @@ public class PhysarumManager : MonoBehaviour
     public VisualEffect vfx;
     public int vfxTextureSize;
 
+    [Header("Fluid")]
+    public RenderTexture fluidTexture;
+    public float fluidStrength;
+
     [Header("Updates")]
     [Range(0, 10)] public int updatesPerFrame = 1;
 
@@ -141,6 +145,8 @@ public class PhysarumManager : MonoBehaviour
         if (debugParticles)
             InitializeParticleTexture();
 
+        InitializeFluid();
+
         if(useVFX)
             InitializeVFX();
 
@@ -215,6 +221,12 @@ public class PhysarumManager : MonoBehaviour
         shader.SetTexture(moveParticlesKernel, "_Stimuli", RWStimuli);
         shader.SetVector("_StimuliDimension", new Vector2(RWStimuli.width, RWStimuli.height));
     }
+
+    void InitializeFluid() {
+
+        shader.SetTexture(moveParticlesKernel, "_FluidTexture", fluidTexture);
+        shader.SetVector("_FluidDimension", new Vector2(fluidTexture.width, fluidTexture.height));
+	}
 
     void InitializeParticlesBuffer() {
 
@@ -315,6 +327,8 @@ public class PhysarumManager : MonoBehaviour
         shader.SetBool("_StimuliToColor", colorFromStimuli);
         shader.SetFloat("_DirectionAngle", directionAngle * Mathf.Deg2Rad);
         shader.SetFloat("_DirectionStrength", directionStrength);
+
+        shader.SetFloat("_FluidStrength", fluidStrength);
 
         shader.SetBuffer(moveParticlesKernel, "_ParticleBuffer", particleBuffers[index]);
 
