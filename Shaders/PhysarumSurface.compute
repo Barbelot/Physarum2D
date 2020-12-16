@@ -8,6 +8,7 @@
 #pragma kernel UpdateTrail
 #pragma kernel CleanParticleTexture
 #pragma kernel WriteParticleTexture
+#pragma kernel UpdateParticleMap
 
 #include "Random.cginc"
 
@@ -18,6 +19,7 @@ struct Particle
 	float4 color;
 	float age;
 	float lifetime;
+	float stimuliIntensity;
 };
 
 float2 _TrailDimension;
@@ -27,6 +29,8 @@ float _Decay;
 bool _StimuliActive;
 float2 _StimuliDimension;
 float _StimuliIntensity;
+bool _StimuliToColor;
+
 
 float _SensorAngle;
 float _RotationAngle;
@@ -41,6 +45,7 @@ RWStructuredBuffer<Particle> _ParticleBuffer;
 RWTexture2D<float4> _TrailBuffer;
 RWTexture2D<float4> _Stimuli;
 RWTexture2D<float4> _ParticleTexture;
+RWTexture2D<float4> _ParticlePositionMap;
 
 float2 _EmitterPosition;
 float2 _EmitterPreviousPosition;
@@ -50,6 +55,13 @@ int _EmitterCapacity;
 float4 _EmitterMainColor;
 float4 _EmitterSecondaryColor;
 float _EmitterSecondaryColorProbability;
+
+float2 _ParticlePositionMapSize;
+
+float2 _Gravity;
+
+float _DirectionAngle;
+float _DirectionStrength;
 
 /**********************
 FUNCTIONS
@@ -87,10 +99,19 @@ void InitParticle(uint3 id) {
 	_ParticleBuffer[id.x].color = Random(id.x + 288) < _EmitterSecondaryColorProbability ? _EmitterSecondaryColor : _EmitterMainColor;
 	_ParticleBuffer[id.x].lifetime = Random(id.x + 781) * (_LifetimeMinMax.y - _LifetimeMinMax.x) + _LifetimeMinMax.x;
 	_ParticleBuffer[id.x].age = -1;
+	_ParticleBuffer[id.x].stimuliIntensity = 0;
 }
 
 float2 GetUVFromPosition(float2 pos) {
 	return pos / _TrailSize + float2(0.5, 0.5);
+}
+
+float ReadStimuli(float2 pos) {
+
+	float2 posUV = GetUVFromPosition(pos);
+
+	//value.rgb += _Stimuli[id.xy].rgb * _WProj;
+	return (0.299 * _Stimuli[posUV * _StimuliDimension.xy].x + 0.587 * _Stimuli[posUV * _StimuliDimension.xy].y + 0.114 * _Stimuli[posUV * _StimuliDimension.xy].z);
 }
 
 float ReadTrail(float2 pos) {
@@ -104,6 +125,17 @@ float ReadTrail(float2 pos) {
 	}
 
 	return value;
+}
+
+float AngleDifference(float angle1, float angle2) {
+
+	float diff = abs(angle1 - angle2);
+
+	while (diff > TWOPI) {
+		diff -= TWOPI;
+	}
+
+	return diff;
 }
 
 /**********************
@@ -148,13 +180,17 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	float2 pos 	= _ParticleBuffer[id.x].position;
 
 	float offset = Random(id.x + 465) * _SensorOffsetDistance;
+
+	float sensorAngle = _SensorAngle;// *_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime;
+	float rotationAngle = _RotationAngle;// *_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime;
+
 	float2 frontPos 		= pos + float2(cos(angle), sin(angle)) * offset;
-	float2 frontLeftPos 	= pos + float2(cos(angle + _SensorAngle), sin(angle + _SensorAngle)) * offset;
-	float2 frontRightPos 	= pos + float2(cos(angle - _SensorAngle), sin(angle - _SensorAngle)) * offset;
+	float2 frontLeftPos 	= pos + float2(cos(angle + sensorAngle), sin(angle + sensorAngle)) * offset;
+	float2 frontRightPos 	= pos + float2(cos(angle - sensorAngle), sin(angle - sensorAngle)) * offset;
 	
-	float F 	= ReadTrail(frontPos);
-	float FL 	= ReadTrail(frontLeftPos);
-	float FR 	= ReadTrail(frontRightPos);
+	float F 	= ReadTrail(frontPos) + (PI - AngleDifference(angle, _DirectionAngle)) * _DirectionStrength;
+	float FL 	= ReadTrail(frontLeftPos) + (PI - AngleDifference(angle + sensorAngle, _DirectionAngle)) * _DirectionStrength;
+	float FR 	= ReadTrail(frontRightPos) + (PI - AngleDifference(angle - sensorAngle, _DirectionAngle)) * _DirectionStrength;
 
 	//decide on the next best step
 	if((F > FL) && (F > FR))
@@ -163,7 +199,7 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	}
 	else if	((F < FL) && (F < FR))
 	{	
-		angle = angle + _RotationAngle * randomSign(id.x + 369);
+		angle = angle + rotationAngle * randomSign(id.x + 369);
 
 		//if (FL > FR) {
 		//	angle += rotationAngle;
@@ -174,11 +210,11 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	}
 	else if	(FL < FR)
 	{
-		angle -= _RotationAngle; 
+		angle -= rotationAngle;
 	}
 	else if	(FR < FL )
 	{
-		angle += _RotationAngle; 
+		angle += rotationAngle;
 	}
 
 	float2 nextPos = pos + float2(cos(angle), sin(angle)) * _StepSize;
@@ -197,25 +233,32 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	}
 	
 	_ParticleBuffer[id.x].angle = angle;
+
+	if (_StimuliToColor) {
+		_ParticleBuffer[id.x].stimuliIntensity = saturate(_ParticleBuffer[id.x].stimuliIntensity + (ReadStimuli(nextPos) - 0.5) * _DeltaTime * _StimuliIntensity * 0.1);
+		_ParticleBuffer[id.x].color = lerp(_EmitterSecondaryColor, _EmitterMainColor, _ParticleBuffer[id.x].stimuliIntensity);
+	}
 }
 
 [numthreads(NUM_THREADS, NUM_THREADS,1)]
 void UpdateTrail (uint3 id : SV_DISPATCHTHREADID)
 {
-	float4 value = _TrailBuffer[id.xy];
+
+	uint2 sampleId = id.xy +_Gravity;
+	float4 value = _TrailBuffer[sampleId];
 	
 	float3 d = float3(1, -1, 0.0);
 
 	//mean filter
 	value = value;
-	value += _TrailBuffer[id.xy - d.xx]; // -1,-1
-	value += _TrailBuffer[id.xy - d.zx]; // 0, -1
-	value += _TrailBuffer[id.xy - d.yx]; // +1, -1
-	value += _TrailBuffer[id.xy - d.xz]; // -1, 0
-	value += _TrailBuffer[id.xy + d.xz]; // +1, 0
-	value += _TrailBuffer[id.xy + d.yx]; // -1, +1
-	value += _TrailBuffer[id.xy + d.zx]; // 0, +1
-	value += _TrailBuffer[id.xy + d.xx]; // +1, +1
+	value += _TrailBuffer[sampleId - d.xx]; // -1,-1
+	value += _TrailBuffer[sampleId - d.zx]; // 0, -1
+	value += _TrailBuffer[sampleId - d.yx]; // +1, -1
+	value += _TrailBuffer[sampleId - d.xz]; // -1, 0
+	value += _TrailBuffer[sampleId + d.xz]; // +1, 0
+	value += _TrailBuffer[sampleId + d.yx]; // -1, +1
+	value += _TrailBuffer[sampleId + d.zx]; // 0, +1
+	value += _TrailBuffer[sampleId + d.xx]; // +1, +1
 	
 	value = (value / 9) * (1-_Decay);
 
@@ -233,5 +276,17 @@ void WriteParticleTexture(uint3 id : SV_DISPATCHTHREADID)
 {
 	if(_ParticleBuffer[id.x].age >= 0)
 		_ParticleTexture[GetUVFromPosition(_ParticleBuffer[id.x].position) * _TrailDimension.xy] = float4(1, 1, 1, 1) * (1.0f - _ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime);
+}
+
+[numthreads(NUM_THREADS, 1, 1)]
+void UpdateParticleMap(uint3 id : SV_DISPATCHTHREADID)
+{
+	uint2 mapCoord = uint2(id.x % _ParticlePositionMapSize.x, id.x / _ParticlePositionMapSize.x);
+
+	float2 particlePos = _ParticleBuffer[id.x].position;
+
+	_ParticlePositionMap[mapCoord] = float4(particlePos.x, particlePos.y, _ParticleBuffer[id.x].age, _ParticleBuffer[id.x].lifetime);
+	//_ParticleColorMap[mapCoord] = _ParticleBuffer[id.x].color;
+	//_ParticleVelocityMap[mapCoord] = float4(_ParticleBuffer[id.x].velocity, 1);
 }
 

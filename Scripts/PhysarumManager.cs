@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine.VFX;
 
 public class PhysarumManager : MonoBehaviour
 {
@@ -12,18 +13,24 @@ public class PhysarumManager : MonoBehaviour
     [Header("Compute shader")]
     public ComputeShader shader;
 
-    [Header("Initial Values")]
-    public Vector2Int trailResolution = Vector2Int.one * 2048;
-    public Vector2 trailSize = Vector2.one;
-    public bool stimuliActive = true;
-    public Texture stimuli;
+    [Header("VFX")]
+    public bool useVFX = false;
+    public VisualEffect vfx;
+    public int vfxTextureSize;
 
     [Header("Updates")]
     [Range(0, 10)] public int updatesPerFrame = 1;
 
     [Header("Trail Parameters")]
+    public Vector2Int trailResolution = Vector2Int.one * 2048;
+    public Vector2 trailSize = Vector2.one;
     [Range(0f, 1f)] public float decay = 0.002f;
+
+    [Header("Stimuli Parameters")]
+    public bool stimuliActive = false;
+    public Texture stimuli;
     public float stimuliIntensity = 0.1f;
+    public bool colorFromStimuli = false;
 
     [Header("Particles Parameters")]
     public bool synchronizeSensorAndRotation = false;
@@ -32,6 +39,10 @@ public class PhysarumManager : MonoBehaviour
     [Range(0f, 1f)] public float sensorOffsetDistance = 0.01f;
     [Range(0f, 1f)] public float stepSize = 0.001f;
     public Vector2 lifetimeMinMax = Vector2.one;
+    [Range(-180f, 180f)] public float gravityAngle;
+    public float gravityStrength = 0;
+    [Range(0, 360f)] public float directionAngle;
+    public float directionStrength = 0;
 
     [Header("Debug")]
     public bool debugParticles = false;
@@ -43,7 +54,7 @@ public class PhysarumManager : MonoBehaviour
     private RenderTexture trail;
     private RenderTexture RWStimuli;
     private RenderTexture particleTexture;
-    private int initParticlesKernel, spawnParticlesKernel, moveParticlesKernel, updateTrailKernel, cleanParticleTexture, writeParticleTexture;
+    private int initParticlesKernel, spawnParticlesKernel, moveParticlesKernel, updateTrailKernel, cleanParticleTexture, writeParticleTexture, updateParticleMap;
     private ComputeBuffer[] particleBuffers;
 
     private static int _groupCount = 32;       // Group size has to be same with the compute shader group size
@@ -55,18 +66,22 @@ public class PhysarumManager : MonoBehaviour
 		public Vector4 color;
         public float age;
         public float lifetime;
+        public float stimuliIntensity;
 
-        public Particle(Vector2 pos, float angle, Vector4 color, float age, float lifetime)
+        public Particle(Vector2 pos, float angle, Vector4 color, float age, float lifetime, float stimuliIntensity)
         {
             point = pos;
             this.angle = angle;
 			this.color = color;
             this.age = age;
             this.lifetime = lifetime;
+            this.stimuliIntensity = stimuliIntensity;
         }
     };
 
-    private const int _particleStride = 9 * sizeof(float);
+    private const int _particleStride = 10 * sizeof(float);
+
+    private RenderTexture _particlePositionMap;
 
     private bool _initialized = false;
 
@@ -92,6 +107,12 @@ public class PhysarumManager : MonoBehaviour
         for (int i = 0; i < updatesPerFrame; i++) {
             UpdateParticles();
             UpdateTrail();
+
+        }
+
+        if (useVFX) {
+            if (_emittersList.Count > 0)
+                UpdateVFX(0);
         }
 
         if (debugParticles)
@@ -99,7 +120,7 @@ public class PhysarumManager : MonoBehaviour
     }
 
     void OnDisable() {
-        ReleaseParticlesBuffer();
+        CleanUp();
     }
 
 	#endregion
@@ -120,6 +141,7 @@ public class PhysarumManager : MonoBehaviour
         updateTrailKernel = shader.FindKernel("UpdateTrail");
         cleanParticleTexture = shader.FindKernel("CleanParticleTexture");
         writeParticleTexture = shader.FindKernel("WriteParticleTexture");
+        updateParticleMap = shader.FindKernel("UpdateParticleMap");
 
         InitializeTrail();
         InitializeStimuli();
@@ -129,6 +151,9 @@ public class PhysarumManager : MonoBehaviour
 
         if (debugParticles)
             InitializeParticleTexture();
+
+        if(useVFX)
+            InitializeVFX();
 
         _initialized = true;
     }
@@ -219,9 +244,30 @@ public class PhysarumManager : MonoBehaviour
         physarumMaterial.SetTexture("PhysarumStimuli", stimuli);
 	}
 
+    void InitializeVFX() {
+
+        _particlePositionMap = new RenderTexture(vfxTextureSize, vfxTextureSize, 1, RenderTextureFormat.ARGBFloat);
+        _particlePositionMap.enableRandomWrite = true;
+        _particlePositionMap.Create();
+
+        shader.SetVector("_ParticlePositionMapSize", new Vector2(_particlePositionMap.width, _particlePositionMap.height));
+        shader.SetTexture(updateParticleMap, "_ParticlePositionMap", _particlePositionMap);
+
+        vfx.SetTexture("ParticlePosition", _particlePositionMap);
+        vfx.SetFloat("TextureSize", vfxTextureSize);
+    }
+
 	#endregion
 
 	#region Releases
+
+    void CleanUp() {
+
+        ReleaseParticlesBuffer();
+
+        if(useVFX)
+            ReleaseVFX();
+    }
 
 	void ReleaseParticlesBuffer() {
 
@@ -233,6 +279,11 @@ public class PhysarumManager : MonoBehaviour
                 particleBuffer.Release();
         }
     }
+
+    void ReleaseVFX() {
+
+        _particlePositionMap.Release();
+	}
 
     #endregion
 
@@ -274,7 +325,11 @@ public class PhysarumManager : MonoBehaviour
         shader.SetFloat("_RotationAngle", rotationAngle);
         shader.SetFloat("_SensorOffsetDistance", sensorOffsetDistance);
         shader.SetFloat("_StepSize", stepSize * Time.deltaTime);
+        shader.SetBool("_StimuliActive", stimuliActive);
         shader.SetFloat("_StimuliIntensity", stimuliIntensity);
+        shader.SetBool("_StimuliToColor", colorFromStimuli);
+        shader.SetFloat("_DirectionAngle", directionAngle * Mathf.Deg2Rad);
+        shader.SetFloat("_DirectionStrength", directionStrength);
 
         shader.SetBuffer(moveParticlesKernel, "_ParticleBuffer", particleBuffers[index]);
 
@@ -284,6 +339,7 @@ public class PhysarumManager : MonoBehaviour
     void UpdateTrail()
     {
         shader.SetFloat("_Decay", decay);
+        shader.SetVector("_Gravity", new Vector2(Mathf.Cos(gravityAngle * Mathf.Deg2Rad), Mathf.Sin(gravityAngle * Mathf.Deg2Rad)) * gravityStrength);
         shader.Dispatch(updateTrailKernel, trailResolution.x / _groupCount, trailResolution.y / _groupCount, 1);
     }
 
@@ -295,6 +351,13 @@ public class PhysarumManager : MonoBehaviour
             shader.SetBuffer(writeParticleTexture, "_ParticleBuffer", particleBuffers[i]);
             shader.Dispatch(writeParticleTexture, _emittersList[i].capacity / _groupCount, 1, 1);
         }
+    }
+
+    void UpdateVFX(int index) {
+
+        shader.SetBuffer(updateParticleMap, "_ParticleBuffer", particleBuffers[index]);
+        shader.Dispatch(updateParticleMap, _emittersList[index].capacity / _groupCount, 1, 1);
+
     }
 
 	#endregion
