@@ -23,10 +23,10 @@ public class PhysarumEmitter : MonoBehaviour
 	public Color secondaryColor = Color.red;
 	[Range(0, 1)] public float secondaryColorProbability = 0.5f;
 	[Space]
-	[Range(-180f, 180f)] public float sensorAngleDegrees = 45f;     //in degrees
+	[Range(-180f, 180f)] public float sensorAngleDegrees = 10f;     //in degrees
 	//[Range(-180f, 180f)] public float rotationAngleDegrees = 45f;//in degrees
-	[Range(0f, 1f)] public float sensorOffsetDistance = 0.01f;
-	[Range(0f, 1f)] public float stepSize = 0.001f;
+	[Range(0f, 1f)] public float sensorOffsetDistance = 0.05f;
+	[Range(0f, 1f)] public float stepSize = 0.1f;
 
 	[Header("Gizmos")]
 	public bool showGizmos = true;
