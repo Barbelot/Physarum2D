@@ -47,11 +47,11 @@ public class PhysarumManager : MonoBehaviour
 
     private List<PhysarumEmitter> _emittersList;
 
-    private RenderTexture trail;
-    private RenderTexture RWStimuli;
-    private RenderTexture particleTexture;
-    private int initParticlesKernel, spawnParticlesKernel, moveParticlesKernel, updateTrailKernel, cleanParticleTexture, writeParticleTexture, updateParticleMap;
-    private ComputeBuffer[] particleBuffers;
+    private RenderTexture _trail;
+    private RenderTexture _RWStimuli;
+    private RenderTexture _particleTexture;
+    private int _initParticlesKernel, _spawnParticlesKernel, _moveParticlesKernel, _updateTrailKernel, _cleanParticleTexture, _writeParticleTexture, _updateParticleMap;
+    private List<ComputeBuffer> _particleBuffers;
 
     private static int _groupCount = 32;       // Group size has to be same with the compute shader group size
 
@@ -128,13 +128,13 @@ public class PhysarumManager : MonoBehaviour
             return;
         }
 
-        initParticlesKernel = shader.FindKernel("InitParticles");
-        spawnParticlesKernel = shader.FindKernel("SpawnParticles");
-        moveParticlesKernel = shader.FindKernel("MoveParticles");
-        updateTrailKernel = shader.FindKernel("UpdateTrail");
-        cleanParticleTexture = shader.FindKernel("CleanParticleTexture");
-        writeParticleTexture = shader.FindKernel("WriteParticleTexture");
-        updateParticleMap = shader.FindKernel("UpdateParticleMap");
+        _initParticlesKernel = shader.FindKernel("InitParticles");
+        _spawnParticlesKernel = shader.FindKernel("SpawnParticles");
+        _moveParticlesKernel = shader.FindKernel("MoveParticles");
+        _updateTrailKernel = shader.FindKernel("UpdateTrail");
+        _cleanParticleTexture = shader.FindKernel("CleanParticleTexture");
+        _writeParticleTexture = shader.FindKernel("WriteParticleTexture");
+        _updateParticleMap = shader.FindKernel("UpdateParticleMap");
 
         InitializeTrail();
         InitializeStimuli();
@@ -153,78 +153,82 @@ public class PhysarumManager : MonoBehaviour
         _initialized = true;
     }
 
-    void InitializeParticles(int index) {
+    void InitializeParticles(PhysarumEmitter emitter) {
         // allocate memory for the particles
-        if (_emittersList[index].capacity > _groupCount * 65535) {
-            _emittersList[index].capacity = _groupCount * 65535;
-            Debug.Log("Reduced emitter " + _emittersList[index].name + " capacity to maximum capacity for " + _groupCount + " threadGroups (" + _groupCount * 65535 + ").");
+        if (emitter.capacity > _groupCount * 65535) {
+            emitter.capacity = _groupCount * 65535;
+            Debug.Log("Reduced emitter " + emitter.name + " capacity to maximum capacity for " + _groupCount + " threadGroups (" + _groupCount * 65535 + ").");
         }
 
-        Particle[] data = new Particle[_emittersList[index].capacity];
-        particleBuffers[index] = new ComputeBuffer(data.Length, _particleStride);
-        particleBuffers[index].SetData(data);
+        Particle[] data = new Particle[emitter.capacity];
+        ComputeBuffer particleBuffer = new ComputeBuffer(data.Length, _particleStride);
+        particleBuffer.SetData(data);
+        _particleBuffers.Add(particleBuffer);
 
-        shader.SetVector("_EmitterLifetimeMinMax", _emittersList[index].lifetimeMinMax);
-        shader.SetInt("_EmitterCapacity", _emittersList[index].capacity);
-        shader.SetVector("_EmitterPosition", _emittersList[index].position);
-        shader.SetVector("_EmitterPreviousPosition", _emittersList[index].previousPosition);
-        shader.SetFloat("_EmitterRadius", _emittersList[index].radius);
-        shader.SetFloat("_EmitterSpawnRate", _emittersList[index].spawnRate);
-        shader.SetVector("_EmitterMainColor", _emittersList[index].mainColor);
-        shader.SetVector("_EmitterSecondaryColor", _emittersList[index].secondaryColor);
-        shader.SetFloat("_EmitterSecondaryColorProbability", _emittersList[index].secondaryColorProbability);
-        shader.SetBuffer(initParticlesKernel, "_ParticleBuffer", particleBuffers[index]);
+        shader.SetVector("_EmitterLifetimeMinMax", emitter.lifetimeMinMax);
+        shader.SetInt("_EmitterCapacity", emitter.capacity);
+        shader.SetVector("_EmitterPosition", emitter.position);
+        shader.SetVector("_EmitterPreviousPosition", emitter.previousPosition);
+        shader.SetFloat("_EmitterRadius", emitter.radius);
+        shader.SetFloat("_EmitterSpawnRate", emitter.spawnRate);
+        shader.SetVector("_EmitterMainColor", emitter.mainColor);
+        shader.SetVector("_EmitterSecondaryColor", emitter.secondaryColor);
+        shader.SetFloat("_EmitterSecondaryColorProbability", emitter.secondaryColorProbability);
+        shader.SetBuffer(_initParticlesKernel, "_ParticleBuffer", particleBuffer);
 
-        shader.Dispatch(initParticlesKernel, _emittersList[index].capacity / _groupCount, 1, 1);
+        shader.Dispatch(_initParticlesKernel, emitter.capacity / _groupCount, 1, 1);
     }
 
     void InitializeTrail()
     {
-        trail = new RenderTexture(trailResolution.x, trailResolution.y, 24);
-        trail.enableRandomWrite = true;
-        trail.Create();
+        _trail = new RenderTexture(trailResolution.x, trailResolution.y, 24);
+        _trail.enableRandomWrite = true;
+        _trail.Create();
 
         shader.SetVector("_TrailDimension", new Vector2(trailResolution.x, trailResolution.y));
         shader.SetVector("_TrailSize", trailSize);
 
-        shader.SetTexture(moveParticlesKernel, "_TrailBuffer", trail);
-        shader.SetTexture(updateTrailKernel, "_TrailBuffer", trail);
+        shader.SetTexture(_moveParticlesKernel, "_TrailBuffer", _trail);
+        shader.SetTexture(_updateTrailKernel, "_TrailBuffer", _trail);
     }
 
 	void InitializeParticleTexture() {
-		particleTexture = new RenderTexture(trailResolution.x, trailResolution.y, 24);
-		particleTexture.enableRandomWrite = true;
-		particleTexture.Create();
+		_particleTexture = new RenderTexture(trailResolution.x, trailResolution.y, 24);
+		_particleTexture.enableRandomWrite = true;
+		_particleTexture.Create();
 
 		var rend = GetComponent<Renderer>();
-		rend.material.mainTexture = particleTexture;
+		rend.material.mainTexture = _particleTexture;
 
-		shader.SetTexture(cleanParticleTexture, "_ParticleTexture", particleTexture);
-		shader.SetTexture(writeParticleTexture, "_ParticleTexture", particleTexture);
+		shader.SetTexture(_cleanParticleTexture, "_ParticleTexture", _particleTexture);
+		shader.SetTexture(_writeParticleTexture, "_ParticleTexture", _particleTexture);
 	}
 
-	void InitializeStimuli()
+	public void InitializeStimuli()
     {
+        if (_RWStimuli != null)
+            _RWStimuli.Release();
+
         if (stimuli == null)
         {
-            RWStimuli = new RenderTexture(trailResolution.x, trailResolution.y, 24);
-            RWStimuli.enableRandomWrite = true;
-            RWStimuli.Create();
+            _RWStimuli = new RenderTexture(trailResolution.x, trailResolution.y, 24);
+            _RWStimuli.enableRandomWrite = true;
+            _RWStimuli.Create();
         }
         else
         {
-            RWStimuli = new RenderTexture(stimuli.width, stimuli.height, 0);
-            RWStimuli.enableRandomWrite = true;
-            Graphics.Blit(stimuli, RWStimuli);
+            _RWStimuli = new RenderTexture(stimuli.width, stimuli.height, 0);
+            _RWStimuli.enableRandomWrite = true;
+            Graphics.Blit(stimuli, _RWStimuli);
         }
         shader.SetBool("_StimuliActive", stimuliActive);
-        shader.SetTexture(moveParticlesKernel, "_Stimuli", RWStimuli);
-        shader.SetVector("_StimuliDimension", new Vector2(RWStimuli.width, RWStimuli.height));
+        shader.SetTexture(_moveParticlesKernel, "_Stimuli", _RWStimuli);
+        shader.SetVector("_StimuliDimension", new Vector2(_RWStimuli.width, _RWStimuli.height));
     }
 
     void InitializeFluid() {
 
-        shader.SetTexture(moveParticlesKernel, "_FluidTexture", fluidTexture);
+        shader.SetTexture(_moveParticlesKernel, "_FluidTexture", fluidTexture);
         shader.SetVector("_FluidDimension", new Vector2(fluidTexture.width, fluidTexture.height));
 	}
 
@@ -232,15 +236,12 @@ public class PhysarumManager : MonoBehaviour
 
         ReleaseParticlesBuffer();
 
-        particleBuffers = new ComputeBuffer[_emittersList.Count];
-
-        for (int i = 0; i < particleBuffers.Length; i++)
-            InitializeParticles(i);
+        _particleBuffers = new List<ComputeBuffer>();
     }
 
     void InitializeMaterial() {
 
-        physarumMaterial.SetTexture("PhysarumTrail", trail);
+        physarumMaterial.SetTexture("PhysarumTrail", _trail);
         physarumMaterial.SetTexture("PhysarumStimuli", stimuli);
 	}
 
@@ -251,7 +252,7 @@ public class PhysarumManager : MonoBehaviour
         _particlePositionMap.Create();
 
         shader.SetVector("_ParticlePositionMapSize", new Vector2(_particlePositionMap.width, _particlePositionMap.height));
-        shader.SetTexture(updateParticleMap, "_ParticlePositionMap", _particlePositionMap);
+        shader.SetTexture(_updateParticleMap, "_ParticlePositionMap", _particlePositionMap);
 
         vfx.SetTexture("ParticlePosition", _particlePositionMap);
         vfx.SetFloat("TextureSize", vfxTextureSize);
@@ -263,6 +264,7 @@ public class PhysarumManager : MonoBehaviour
 
     void CleanUp() {
 
+        _emittersList.Clear();
         ReleaseParticlesBuffer();
 
         if(useVFX)
@@ -271,13 +273,15 @@ public class PhysarumManager : MonoBehaviour
 
 	void ReleaseParticlesBuffer() {
 
-        if (particleBuffers == null)
+        if (_particleBuffers == null)
             return;
 
-        foreach (var particleBuffer in particleBuffers) {
+        foreach (var particleBuffer in _particleBuffers) {
             if (particleBuffer != null)
                 particleBuffer.Release();
         }
+
+        _particleBuffers.Clear();
     }
 
     void ReleaseVFX() {
@@ -302,6 +306,7 @@ public class PhysarumManager : MonoBehaviour
         shader.SetFloat("_DeltaTime", Time.deltaTime);
         shader.SetFloat("_AbsoluteTime", Time.time);
 
+        shader.SetVector("_EmitterLifetimeMinMax", _emittersList[index].lifetimeMinMax);
         shader.SetInt("_EmitterCapacity", _emittersList[index].capacity);
         shader.SetVector("_EmitterPosition", _emittersList[index].position);
         shader.SetVector("_EmitterPreviousPosition", _emittersList[index].previousPosition);
@@ -311,9 +316,9 @@ public class PhysarumManager : MonoBehaviour
         shader.SetVector("_EmitterSecondaryColor", _emittersList[index].secondaryColor);
         shader.SetFloat("_EmitterSecondaryColorProbability", _emittersList[index].secondaryColorProbability);
 
-        shader.SetBuffer(spawnParticlesKernel, "_ParticleBuffer", particleBuffers[index]);
+        shader.SetBuffer(_spawnParticlesKernel, "_ParticleBuffer", _particleBuffers[index]);
 
-        shader.Dispatch(spawnParticlesKernel, _emittersList[index].capacity / _groupCount, 1, 1);
+        shader.Dispatch(_spawnParticlesKernel, _emittersList[index].capacity / _groupCount, 1, 1);
     }
 
     void MoveParticles(int index) {
@@ -330,32 +335,32 @@ public class PhysarumManager : MonoBehaviour
 
         shader.SetFloat("_FluidStrength", fluidStrength);
 
-        shader.SetBuffer(moveParticlesKernel, "_ParticleBuffer", particleBuffers[index]);
+        shader.SetBuffer(_moveParticlesKernel, "_ParticleBuffer", _particleBuffers[index]);
 
-        shader.Dispatch(moveParticlesKernel, _emittersList[index].capacity / _groupCount, 1, 1);
+        shader.Dispatch(_moveParticlesKernel, _emittersList[index].capacity / _groupCount, 1, 1);
     }
 
     void UpdateTrail()
     {
         shader.SetFloat("_Decay", decay);
         shader.SetVector("_Gravity", new Vector2(Mathf.Cos(gravityAngle * Mathf.Deg2Rad), Mathf.Sin(gravityAngle * Mathf.Deg2Rad)) * gravityStrength);
-        shader.Dispatch(updateTrailKernel, trailResolution.x / _groupCount, trailResolution.y / _groupCount, 1);
+        shader.Dispatch(_updateTrailKernel, trailResolution.x / _groupCount, trailResolution.y / _groupCount, 1);
     }
 
     void UpdateParticleTexture() {
 
-        shader.Dispatch(cleanParticleTexture, trailResolution.x / _groupCount, trailResolution.y / _groupCount, 1);
+        shader.Dispatch(_cleanParticleTexture, trailResolution.x / _groupCount, trailResolution.y / _groupCount, 1);
 
-        for (int i = 0; i < particleBuffers.Length; i++) {
-            shader.SetBuffer(writeParticleTexture, "_ParticleBuffer", particleBuffers[i]);
-            shader.Dispatch(writeParticleTexture, _emittersList[i].capacity / _groupCount, 1, 1);
+        for (int i = 0; i < _particleBuffers.Count; i++) {
+            shader.SetBuffer(_writeParticleTexture, "_ParticleBuffer", _particleBuffers[i]);
+            shader.Dispatch(_writeParticleTexture, _emittersList[i].capacity / _groupCount, 1, 1);
         }
     }
 
     void UpdateVFX(int index) {
 
-        shader.SetBuffer(updateParticleMap, "_ParticleBuffer", particleBuffers[index]);
-        shader.Dispatch(updateParticleMap, _emittersList[index].capacity / _groupCount, 1, 1);
+        shader.SetBuffer(_updateParticleMap, "_ParticleBuffer", _particleBuffers[index]);
+        shader.Dispatch(_updateParticleMap, _emittersList[index].capacity / _groupCount, 1, 1);
 
     }
 
@@ -380,14 +385,20 @@ public class PhysarumManager : MonoBehaviour
 
         _emittersList.Add(emitter);
 
-        InitializeParticlesBuffer();
+        InitializeParticles(emitter);
     }
 
     public void RemoveEmitter(PhysarumEmitter emitter) {
 
-        _emittersList.Remove(emitter);
+        if (!_emittersList.Contains(emitter))
+            return;
 
-        InitializeParticlesBuffer();
+        int index = _emittersList.IndexOf(emitter);
+
+        _particleBuffers[index].Release();
+        _particleBuffers.RemoveAt(index);
+
+        _emittersList.Remove(emitter);
     }
 
     #endregion
