@@ -36,7 +36,11 @@ public class PhysarumEmitter : MonoBehaviour
 
 	private PhysarumManager _physarumManager;
 
+	private bool previousPositionReady = false;
+
 	private void OnEnable() {
+
+		previousPositionReady = false;
 
 		AddEmitter();
 		UpdateEmitter();
@@ -91,6 +95,11 @@ public class PhysarumEmitter : MonoBehaviour
 				position.x = transform.position.y;
 				position.y = transform.position.z;
 				break;
+		}
+
+		if (!previousPositionReady) {
+			previousPosition = position;
+			previousPositionReady = true;
 		}
 	}
 
