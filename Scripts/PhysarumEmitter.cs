@@ -10,19 +10,25 @@ public class PhysarumEmitter : MonoBehaviour
 	//[Tooltip("Size of your physarum area in meters.")] public Vector2 size = Vector2.one;
 	//[Tooltip("Is your emitter centered on its origin ?")] public bool isCentered = false;
 
-	[Header("Physarum Emitter")]
-	public string behaviourID;
-	[Space]
+	[Header("Physarum Manager")]
+	public string managerID;
+
+	[Header("Emission")]
 	public int capacity = 1000000;
 	public float spawnRate = 1;
+
+	[Header("Lifetime")]
 	public Vector2 lifetimeMinMax;
-	[Space]
+	[Header("Size")]
 	public float radius = 0.1f;
-	[Space]
+	[Header("Color")]
 	public Color mainColor = Color.white;
 	public Color secondaryColor = Color.red;
 	[Range(0, 1)] public float secondaryColorProbability = 0.5f;
-	[Space]
+	public bool useColorOverLife = false;
+	public Gradient colorOverLife;
+
+	[Header("Propagation")]
 	[Range(-180f, 180f)] public float sensorAngleDegrees = 10f;     //in degrees
 	//[Range(-180f, 180f)] public float rotationAngleDegrees = 45f;//in degrees
 	[Range(0f, 1f)] public float sensorOffsetDistance = 0.05f;
@@ -68,9 +74,9 @@ public class PhysarumEmitter : MonoBehaviour
 
 	void AddEmitter() {
 
-		foreach (var behaviour in FindObjectsOfType<PhysarumManager>()) {
-			if (behaviour.ID == behaviourID) {
-				_physarumManager = behaviour; break;
+		foreach (var manager in FindObjectsOfType<PhysarumManager>()) {
+			if (manager.ID == managerID) {
+				_physarumManager = manager; break;
 			}
 		}
 

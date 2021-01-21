@@ -59,7 +59,7 @@ public class PhysarumManager : MonoBehaviour
     private int _initParticlesKernel, _spawnParticlesKernel, _moveParticlesKernel, _updateTrailKernel, _cleanParticleTexture, _writeParticleTexture, _updateParticleMap, _updateVelocitiesKernel;
     private List<ComputeBuffer> _particleBuffers;
 
-    private static int _groupCount = 32;       // Group size has to be same with the compute shader group size
+    private const int _groupCount = 32;       // Group size has to be same with the compute shader group size
 
     struct Particle
     {
@@ -84,6 +84,10 @@ public class PhysarumManager : MonoBehaviour
     private const int _particleStride = 10 * sizeof(float);
 
     private RenderTexture _particlePositionMap;
+
+    private const int _gradientLength = 8;
+    private float _gradientStepSize;
+    private Vector4[] _colorOverLife;
 
     private bool _initialized = false;
 
@@ -336,6 +340,12 @@ public class PhysarumManager : MonoBehaviour
         shader.SetVector("_EmitterMainColor", _emittersList[index].mainColor);
         shader.SetVector("_EmitterSecondaryColor", _emittersList[index].secondaryColor);
         shader.SetFloat("_EmitterSecondaryColorProbability", _emittersList[index].secondaryColorProbability);
+        shader.SetBool("_EmitterUseColorOverLife", _emittersList[index].useColorOverLife);
+
+        if (_emittersList[index].useColorOverLife) {
+            UpdateColorOverLife(index);
+            shader.SetVectorArray("_EmitterColorOverLife", _colorOverLife);
+        }
 
         shader.SetBuffer(_spawnParticlesKernel, "_ParticleBuffer", _particleBuffers[index]);
 
@@ -397,6 +407,9 @@ public class PhysarumManager : MonoBehaviour
 	void InitializeEmitters() {
 
         CreateEmittersList();
+
+        _colorOverLife = new Vector4[_gradientLength];
+        _gradientStepSize = 1.0f / (_gradientLength - 1);
     }
 
     void CreateEmittersList() {
@@ -426,6 +439,12 @@ public class PhysarumManager : MonoBehaviour
 
         _emittersList.Remove(emitter);
     }
+
+    void UpdateColorOverLife(int index) {
+
+        for (int i = 0; i < _gradientLength; i++)
+            _colorOverLife[i] = _emittersList[index].colorOverLife.Evaluate(i * _gradientStepSize);
+	}
 
     #endregion
 }

@@ -1,6 +1,7 @@
-﻿#define NUM_THREADS 32
-#define PI 3.14159265359
+﻿#define PI 3.14159265359
 #define TWOPI 6.28318530718
+#define NUM_THREADS 32
+#define GRADIENT_LENGTH 8
 
 #pragma kernel InitParticles
 #pragma kernel SpawnParticles
@@ -52,6 +53,8 @@ float4 _EmitterMainColor;
 float4 _EmitterSecondaryColor;
 float _EmitterSecondaryColorProbability;
 float2 _EmitterLifetimeMinMax;
+bool _EmitterUseColorOverLife;
+float4 _EmitterColorOverLife[GRADIENT_LENGTH];
 
 float _EmitterSensorAngle;
 //float _EmitterRotationAngle;
@@ -104,10 +107,14 @@ void InitParticle(uint3 id) {
 
 	_ParticleBuffer[id.x].position = RandomInsideCircle(id.x + 45, lerp(_EmitterPreviousPosition, _EmitterPosition, Random(id.x + 912)), _EmitterRadius);
 	_ParticleBuffer[id.x].angle = Random(id.x + 2) * TWOPI;
-	_ParticleBuffer[id.x].color = Random(id.x + 288) < _EmitterSecondaryColorProbability ? _EmitterSecondaryColor : _EmitterMainColor;
 	_ParticleBuffer[id.x].lifetime = Random(id.x + 781)* (_EmitterLifetimeMinMax.y - _EmitterLifetimeMinMax.x) + _EmitterLifetimeMinMax.x;
 	_ParticleBuffer[id.x].age = -1;
 	_ParticleBuffer[id.x].stimuliIntensity = 0;
+
+	if (_EmitterUseColorOverLife)
+		_ParticleBuffer[id.x].color = _EmitterColorOverLife[0];
+	else
+		_ParticleBuffer[id.x].color = Random(id.x + 288) < _EmitterSecondaryColorProbability ? _EmitterSecondaryColor : _EmitterMainColor;
 }
 
 float2 GetUVFromPosition(float2 pos) {
@@ -151,6 +158,19 @@ float AngleDifference(float angle1, float angle2) {
 	return diff;
 }
 
+float4 GetColorFromGradient(float time) {
+
+	float4 color = _EmitterColorOverLife[0];
+	float stepSize = 1.0f / (GRADIENT_LENGTH - 1);
+
+	for (uint i = 1; i < GRADIENT_LENGTH; i++) {
+		float colorPos = saturate((time - stepSize * (i-1)) / stepSize);
+		color = lerp(color, _EmitterColorOverLife[i], colorPos);
+	}
+
+	return color;
+}
+
 /**********************
 KERNELS
 **********************/
@@ -177,6 +197,11 @@ void SpawnParticles(uint3 id: SV_DISPATCHTHREADID)
 
 	//Age
 	_ParticleBuffer[id.x].age += _DeltaTime;
+
+	//Update color
+	if (_EmitterUseColorOverLife) {
+		_ParticleBuffer[id.x].color = GetColorFromGradient(_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime);
+	}
 
 	//Die
 	if (_ParticleBuffer[id.x].age > _ParticleBuffer[id.x].lifetime && _ParticleBuffer[id.x].lifetime > 0)
