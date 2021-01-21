@@ -6,6 +6,7 @@
 #pragma kernel SpawnParticles
 #pragma kernel MoveParticles
 #pragma kernel UpdateTrail
+#pragma kernel UpdateVelocities
 #pragma kernel CleanParticleTexture
 #pragma kernel WriteParticleTexture
 #pragma kernel UpdateParticleMap
@@ -25,6 +26,7 @@ struct Particle
 float2 _TrailDimension;
 float2 _TrailSize;
 float _Decay;
+float _VelocitiesDecay;
 
 bool _StimuliActive;
 float2 _StimuliDimension;
@@ -36,6 +38,7 @@ float _AbsoluteTime;
 
 RWStructuredBuffer<Particle> _ParticleBuffer;
 RWTexture2D<float4> _TrailBuffer;
+RWTexture2D<float4> _VelocitiesBuffer;
 RWTexture2D<float4> _Stimuli;
 RWTexture2D<float4> _ParticleTexture;
 RWTexture2D<float4> _ParticlePositionMap;
@@ -239,13 +242,18 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 
 	_ParticleBuffer[id.x].position = nextPos;
 	
+	uint2 nextPosCoords = GetUVFromPosition(nextPos) * _TrailDimension.xy;
+
 	//if the particle moved, leave a mark in the trail buffer
 	if(distance(nextPos, pos) > 0.0001)
 	{
-		_TrailBuffer[GetUVFromPosition(nextPos) * _TrailDimension.xy] += _ParticleBuffer[id.x].color;
+		_TrailBuffer[nextPosCoords] += _ParticleBuffer[id.x].color;
 	}
 	
 	_ParticleBuffer[id.x].angle = angle;
+
+	//Add velocity
+	_VelocitiesBuffer[nextPosCoords] += float4(cos(angle), sin(angle), 0, 0);
 
 	if (_StimuliToColor) {
 		_ParticleBuffer[id.x].stimuliIntensity = saturate(_ParticleBuffer[id.x].stimuliIntensity + (ReadStimuli(nextPos) - 0.5) * _DeltaTime * _StimuliIntensity * 0.1);
@@ -276,6 +284,31 @@ void UpdateTrail (uint3 id : SV_DISPATCHTHREADID)
 	value = (value / 9) * (1-_Decay);
 
 	_TrailBuffer[id.xy] = value;
+}
+
+[numthreads(NUM_THREADS, NUM_THREADS, 1)]
+void UpdateVelocities(uint3 id : SV_DISPATCHTHREADID)
+{
+
+	uint2 sampleId = id.xy;
+	float4 value = _VelocitiesBuffer[sampleId];
+
+	float3 d = float3(1, -1, 0.0);
+
+	//mean filter
+	value = value;
+	value += _VelocitiesBuffer[sampleId - d.xx]; // -1,-1
+	value += _VelocitiesBuffer[sampleId - d.zx]; // 0, -1
+	value += _VelocitiesBuffer[sampleId - d.yx]; // +1, -1
+	value += _VelocitiesBuffer[sampleId - d.xz]; // -1, 0
+	value += _VelocitiesBuffer[sampleId + d.xz]; // +1, 0
+	value += _VelocitiesBuffer[sampleId + d.yx]; // -1, +1
+	value += _VelocitiesBuffer[sampleId + d.zx]; // 0, +1
+	value += _VelocitiesBuffer[sampleId + d.xx]; // +1, +1
+
+	value = (value / 9) * (1 - _VelocitiesDecay);
+
+	_VelocitiesBuffer[id.xy] = value;
 }
 
 [numthreads(NUM_THREADS, NUM_THREADS, 1)]
