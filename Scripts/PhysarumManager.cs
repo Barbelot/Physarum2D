@@ -35,6 +35,11 @@ public class PhysarumManager : MonoBehaviour
     public bool useVelocities = false;
     [Range(0f, 1f)] public float velocitiesDecay = 0.002f;
 
+    [Header("Influence Settings")]
+    public bool useInfluenceMap = false;
+    public Texture influenceMap;
+    public float influenceStrength = 1;
+
     [Header("Stimuli Settings")]
     public bool useStimuli = false;
     public Texture stimuli;
@@ -49,6 +54,7 @@ public class PhysarumManager : MonoBehaviour
 
     [Header("Debug")]
     public bool debugParticles = false;
+    public bool test = false;
 
     private List<PhysarumEmitter> _emittersList;
 
@@ -365,6 +371,12 @@ public class PhysarumManager : MonoBehaviour
         shader.SetFloat("_DirectionStrength", directionStrength);
 
         shader.SetFloat("_FluidStrength", fluidStrength);
+
+        shader.SetBool("_UseInfluenceMap", useInfluenceMap);
+        shader.SetTexture(_moveParticlesKernel, "_InfluenceMap", influenceMap);
+        shader.SetFloat("_InfluenceStrength", influenceStrength);
+
+        shader.SetBool("_Test", test);
 
         shader.SetBuffer(_moveParticlesKernel, "_ParticleBuffer", _particleBuffers[index]);
 

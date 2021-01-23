@@ -1,5 +1,7 @@
 ﻿#define PI 3.14159265359
 #define TWOPI 6.28318530718
+#define DEG2RAD 0.01745329251
+
 #define NUM_THREADS 32
 #define GRADIENT_LENGTH 8
 
@@ -72,6 +74,12 @@ Texture2D<float4> _FluidTexture;
 float2 _FluidDimension;
 float _FluidStrength;
 
+bool _UseInfluenceMap;
+Texture2D<float4> _InfluenceMap;
+float _InfluenceStrength;
+
+bool _Test;
+
 SamplerState linearClampSampler;
 
 /**********************
@@ -140,6 +148,11 @@ float ReadTrail(float2 pos) {
 	}
 
 	return value;
+}
+
+float4 ReadInfluenceMap(float2 pos) {
+
+	return _InfluenceMap.SampleLevel(linearClampSampler, GetUVFromPosition(pos), 0);
 }
 
 float4 ReadFluid(float2 pos) {
@@ -219,14 +232,23 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 
 	float offset = Random(id.x + 465) * _EmitterSensorOffsetDistance;
 
-	float sensorAngle = _EmitterSensorAngle;// *_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime;
-	float rotationAngle = _EmitterSensorAngle;// *_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime;
+	float sensorAngle = _EmitterSensorAngle;
+
+	if(_UseInfluenceMap)
+		sensorAngle = lerp(10 * DEG2RAD, 180 * DEG2RAD, ReadInfluenceMap(pos).x * _InfluenceStrength);
+
+	float rotationAngle = sensorAngle;
 
 	float2 frontPos 		= pos + float2(cos(angle), sin(angle)) * offset;
 	float2 frontLeftPos 	= pos + float2(cos(angle + sensorAngle), sin(angle + sensorAngle)) * offset;
 	float2 frontRightPos 	= pos + float2(cos(angle - sensorAngle), sin(angle - sensorAngle)) * offset;
 	
 	float2 fluidDirection = ReadFluid(pos).xy;
+
+	//Fluid mean to avoid oscillations
+	//float2 nextFluidDirection = ReadFluid(pos + _EmitterStepSize * fluidDirection).xy;
+	//fluidDirection = (fluidDirection + nextFluidDirection) * 0.5f;
+
 	float fluidAngle = PI + atan(fluidDirection.y / fluidDirection.x);
 
 	float F 	= ReadTrail(frontPos) + (PI - AngleDifference(angle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle, fluidAngle)) * _FluidStrength;
@@ -272,7 +294,9 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	//if the particle moved, leave a mark in the trail buffer
 	if(distance(nextPos, pos) > 0.0001)
 	{
-		_TrailBuffer[nextPosCoords] += _ParticleBuffer[id.x].color;
+		//_TrailBuffer[nextPosCoords] += _ParticleBuffer[id.x].color;	//Additive
+
+		_TrailBuffer[nextPosCoords] = max(_ParticleBuffer[id.x].color, _TrailBuffer[nextPosCoords]);	//Max
 	}
 	
 	_ParticleBuffer[id.x].angle = angle;
