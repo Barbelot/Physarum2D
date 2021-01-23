@@ -119,10 +119,11 @@ void InitParticle(uint3 id) {
 	_ParticleBuffer[id.x].age = -1;
 	_ParticleBuffer[id.x].stimuliIntensity = 0;
 
+	_ParticleBuffer[id.x].color = Random(id.x + 288) < _EmitterSecondaryColorProbability ? _EmitterSecondaryColor : _EmitterMainColor;
+
 	if (_EmitterUseColorOverLife)
-		_ParticleBuffer[id.x].color = _EmitterColorOverLife[0];
-	else
-		_ParticleBuffer[id.x].color = Random(id.x + 288) < _EmitterSecondaryColorProbability ? _EmitterSecondaryColor : _EmitterMainColor;
+		_ParticleBuffer[id.x].color *= _EmitterColorOverLife[0];
+		
 }
 
 float2 GetUVFromPosition(float2 pos) {
@@ -213,7 +214,8 @@ void SpawnParticles(uint3 id: SV_DISPATCHTHREADID)
 
 	//Update color
 	if (_EmitterUseColorOverLife) {
-		_ParticleBuffer[id.x].color = GetColorFromGradient(_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime);
+		_ParticleBuffer[id.x].color = Random(id.x + 288) < _EmitterSecondaryColorProbability ? _EmitterSecondaryColor : _EmitterMainColor;
+		_ParticleBuffer[id.x].color *= GetColorFromGradient(_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime);
 	}
 
 	//Die
