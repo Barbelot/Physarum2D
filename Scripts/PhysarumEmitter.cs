@@ -16,6 +16,8 @@ public class PhysarumEmitter : MonoBehaviour
 	[Header("Emission")]
 	public int capacity = 1000000;
 	public float spawnRate = 1;
+	public bool useSpawnOverDistance;
+	public float spawnRateOverDistance;
 
 	[Header("Lifetime")]
 	public Vector2 lifetimeMinMax;
@@ -107,6 +109,9 @@ public class PhysarumEmitter : MonoBehaviour
 			previousPosition = position;
 			previousPositionReady = true;
 		}
+
+		if (useSpawnOverDistance)
+			spawnRate = Vector3.Distance(previousPosition, position) * spawnRateOverDistance;
 	}
 
 	void RemoveEmitter() {

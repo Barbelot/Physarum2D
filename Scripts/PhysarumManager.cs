@@ -24,7 +24,7 @@ public class PhysarumManager : MonoBehaviour
     public Material fluidMaterial;
 
     [Header("Updates")]
-    [Range(0, 10)] public int updatesPerFrame = 1;
+    [Range(0, 20)] public int updatesPerFrame = 3;
 
     [Header("Trail Settings")]
     public Vector2Int trailResolution = Vector2Int.one * 2048;
@@ -112,6 +112,14 @@ public class PhysarumManager : MonoBehaviour
     }
 
     void Update() {
+
+
+        //int updates = Mathf.FloorToInt(updatesPerSecond * Time.deltaTime);
+        //updates = Mathf.Min(updates, maxUpdatedPerFrames);
+        //if(updates == 0) {
+        //    updates = Random.value < updatesPerSecond * Time.deltaTime ? 1 : 0; 
+        //}
+        //Debug.Log("Doing " + updates + " updates");
 
         for (int i = 0; i < updatesPerFrame; i++) {
             UpdateParticles();
