@@ -14,13 +14,13 @@ public class PhysarumEmitter : MonoBehaviour
 	public string managerID;
 
 	[Header("Emission")]
-	public int capacity = 1000000;
-	public float spawnRate = 1;
+	public int capacity = 2000000;
+	public float spawnRate = 100000;
 	public bool useSpawnOverDistance;
 	public float spawnRateOverDistance;
 
 	[Header("Lifetime")]
-	public Vector2 lifetimeMinMax;
+	public Vector2 lifetimeMinMax = new Vector2(5, 15);
 	[Header("Size")]
 	public float radius = 0.1f;
 	[Header("Color")]

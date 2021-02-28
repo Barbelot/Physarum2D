@@ -21,7 +21,6 @@ public class PhysarumManager : MonoBehaviour
     [Header("Fluid")]
     public RenderTexture fluidTexture;
     public float fluidStrength;
-    public Material fluidMaterial;
 
     [Header("Updates")]
     [Range(0, 20)] public int updatesPerFrame = 3;
@@ -61,6 +60,7 @@ public class PhysarumManager : MonoBehaviour
     private RenderTexture _trail;
     private RenderTexture _velocities;
     private RenderTexture _RWStimuli;
+    private RenderTexture _RWInfluenceMap;
     private RenderTexture _particleTexture;
     private int _initParticlesKernel, _spawnParticlesKernel, _moveParticlesKernel, _updateTrailKernel, _cleanParticleTexture, _writeParticleTexture, _updateParticleMap, _updateVelocitiesKernel;
     private List<ComputeBuffer> _particleBuffers;
@@ -166,6 +166,7 @@ public class PhysarumManager : MonoBehaviour
         InitializeTrail();
         InitializeVelocities();
         InitializeStimuli();
+        InitializeInfluenceMap();
         InitializeMaterial();
         InitializeEmitters();
         InitializeParticlesBuffer();
@@ -248,7 +249,7 @@ public class PhysarumManager : MonoBehaviour
 
         if (stimuli == null)
         {
-            _RWStimuli = new RenderTexture(trailResolution.x, trailResolution.y, 24);
+            _RWStimuli = new RenderTexture(trailResolution.x, trailResolution.y, 0);
             _RWStimuli.enableRandomWrite = true;
             _RWStimuli.Create();
         }
@@ -261,6 +262,24 @@ public class PhysarumManager : MonoBehaviour
         shader.SetBool("_StimuliActive", useStimuli);
         shader.SetTexture(_moveParticlesKernel, "_Stimuli", _RWStimuli);
         shader.SetVector("_StimuliDimension", new Vector2(_RWStimuli.width, _RWStimuli.height));
+    }
+
+    public void InitializeInfluenceMap() {
+
+        if (_RWInfluenceMap != null)
+            _RWInfluenceMap.Release();
+
+        if (influenceMap == null) {
+            _RWInfluenceMap = new RenderTexture(trailResolution.x, trailResolution.y, 0);
+            _RWInfluenceMap.enableRandomWrite = true;
+            _RWInfluenceMap.Create();
+        } else {
+            _RWInfluenceMap = new RenderTexture(influenceMap.width, influenceMap.height, 0);
+            _RWInfluenceMap.enableRandomWrite = true;
+            Graphics.Blit(influenceMap, _RWInfluenceMap);
+        }
+
+        shader.SetTexture(_moveParticlesKernel, "_InfluenceMap", _RWInfluenceMap);
     }
 
     void InitializeFluid() {
@@ -280,8 +299,6 @@ public class PhysarumManager : MonoBehaviour
 
         physarumMaterial.SetTexture("PhysarumTrail", _trail);
         physarumMaterial.SetTexture("PhysarumStimuli", stimuli);
-
-        fluidMaterial.SetTexture("_BaseVelocity", _velocities);
     }
 
     void InitializeVFX() {
@@ -381,10 +398,9 @@ public class PhysarumManager : MonoBehaviour
         shader.SetFloat("_FluidStrength", fluidStrength);
 
         shader.SetBool("_UseInfluenceMap", useInfluenceMap);
-        shader.SetTexture(_moveParticlesKernel, "_InfluenceMap", influenceMap);
-        shader.SetFloat("_InfluenceStrength", influenceStrength);
+		shader.SetFloat("_InfluenceStrength", influenceStrength);
 
-        shader.SetBool("_Test", test);
+		shader.SetBool("_Test", test);
 
         shader.SetBuffer(_moveParticlesKernel, "_ParticleBuffer", _particleBuffers[index]);
 
