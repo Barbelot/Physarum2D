@@ -252,10 +252,11 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	//fluidDirection = (fluidDirection + nextFluidDirection) * 0.5f;
 
 	float fluidAngle = PI + atan(fluidDirection.y / fluidDirection.x);
+	float fluidStrength = _FluidStrength;// *(1.0f - _ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime);
 
-	float F 	= ReadTrail(frontPos) + (PI - AngleDifference(angle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle, fluidAngle)) * _FluidStrength;
-	float FL 	= ReadTrail(frontLeftPos) + (PI - AngleDifference(angle + sensorAngle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle + sensorAngle, fluidAngle)) * _FluidStrength;
-	float FR 	= ReadTrail(frontRightPos) + (PI - AngleDifference(angle - sensorAngle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle - sensorAngle, fluidAngle)) * _FluidStrength;
+	float F 	= ReadTrail(frontPos) + (PI - AngleDifference(angle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle, fluidAngle)) * fluidStrength;
+	float FL 	= ReadTrail(frontLeftPos) + (PI - AngleDifference(angle + sensorAngle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle + sensorAngle, fluidAngle)) * fluidStrength;
+	float FR 	= ReadTrail(frontRightPos) + (PI - AngleDifference(angle - sensorAngle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle - sensorAngle, fluidAngle)) * fluidStrength;
 
 	//decide on the next best step
 	if((F > FL) && (F > FR))
@@ -297,8 +298,9 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	if(distance(nextPos, pos) > 0.0001)
 	{
 		//_TrailBuffer[nextPosCoords] += _ParticleBuffer[id.x].color;	//Additive
-
 		_TrailBuffer[nextPosCoords] = max(_ParticleBuffer[id.x].color, _TrailBuffer[nextPosCoords]);	//Max
+		//_TrailBuffer[nextPosCoords] = _ParticleBuffer[id.x].color;
+		//_TrailBuffer[nextPosCoords] = lerp(max(_ParticleBuffer[id.x].color, _TrailBuffer[nextPosCoords]), _ParticleBuffer[id.x].color, 0.5f);
 	}
 	
 	_ParticleBuffer[id.x].angle = angle;

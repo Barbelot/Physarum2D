@@ -139,7 +139,8 @@ public class PhysarumManager : MonoBehaviour
     }
 
     void OnDisable() {
-        CleanUp();
+
+        //if(_initialized) CleanUp();
     }
 
 	#endregion
@@ -210,7 +211,7 @@ public class PhysarumManager : MonoBehaviour
 
     void InitializeTrail()
     {
-        _trail = new RenderTexture(trailResolution.x, trailResolution.y, 0);
+        _trail = new RenderTexture(trailResolution.x, trailResolution.y, 0, RenderTextureFormat.ARGBFloat);
         _trail.enableRandomWrite = true;
         _trail.Create();
 
@@ -323,8 +324,18 @@ public class PhysarumManager : MonoBehaviour
         _emittersList.Clear();
         ReleaseParticlesBuffer();
 
-        if(useVFX)
+        _trail.Release();
+        _velocities.Release();
+        _RWStimuli.Release();
+        _RWInfluenceMap.Release();
+
+        if (_particleTexture)
+            _particleTexture.Release();
+
+        if (useVFX)
             ReleaseVFX();
+
+        _initialized = false;
     }
 
 	void ReleaseParticlesBuffer() {
@@ -395,7 +406,7 @@ public class PhysarumManager : MonoBehaviour
         shader.SetFloat("_DirectionAngle", directionAngle * Mathf.Deg2Rad);
         shader.SetFloat("_DirectionStrength", directionStrength);
 
-        shader.SetFloat("_FluidStrength", fluidStrength);
+        shader.SetFloat("_FluidStrength", fluidStrength * _emittersList[index].fluidStrength);
 
         shader.SetBool("_UseInfluenceMap", useInfluenceMap);
 		shader.SetFloat("_InfluenceStrength", influenceStrength);

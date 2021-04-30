@@ -24,17 +24,20 @@ public class PhysarumEmitter : MonoBehaviour
 	[Header("Size")]
 	public float radius = 0.1f;
 	[Header("Color")]
-	public Color mainColor = Color.white;
-	public Color secondaryColor = Color.red;
+	[ColorUsage(true, true)] public Color mainColor = Color.white;
+	[ColorUsage(true, true)] public Color secondaryColor = Color.red;
 	[Range(0, 1)] public float secondaryColorProbability = 0.5f;
 	public bool useColorOverLife = false;
-	public Gradient colorOverLife;
+	[GradientUsage(true, ColorSpace.Linear)] public Gradient colorOverLife;
 
 	[Header("Propagation")]
 	[Range(-180f, 180f)] public float sensorAngleDegrees = 10f;     //in degrees
 	//[Range(-180f, 180f)] public float rotationAngleDegrees = 45f;//in degrees
 	[Range(0f, 1f)] public float sensorOffsetDistance = 0.05f;
 	[Range(0f, 1f)] public float stepSize = 0.1f;
+
+	[Header("Fluid Strength")]
+	public float fluidStrength = 1.0f;
 
 	[Header("Gizmos")]
 	public bool showGizmos = true;
