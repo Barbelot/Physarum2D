@@ -7,20 +7,8 @@ public class PhysarumManager : MonoBehaviour
     [Header("Behaviour ID")]
     public string ID;
 
-	[Header("Physarum Material")]
-	public Material physarumMaterial;
-
 	[Header("Compute shader")]
     public ComputeShader shader;
-
-    [Header("VFX")]
-    public bool useVFX = false;
-    public VisualEffect vfx;
-    public int vfxTextureSize;
-
-    [Header("Fluid")]
-    public RenderTexture fluidTexture;
-    public float fluidStrength;
 
     [Header("Updates")]
     [Range(0, 20)] public int updatesPerFrame = 3;
@@ -29,6 +17,10 @@ public class PhysarumManager : MonoBehaviour
     public Vector2Int trailResolution = Vector2Int.one * 2048;
     public Vector2 trailSize = Vector2.one;
     [Range(0f, 1f)] public float decay = 0.002f;
+
+    [Header("Fluid")]
+    public RenderTexture fluidTexture;
+    public float fluidStrength;
 
     [Header("Velocities Settings")]
     public bool useVelocities = false;
@@ -55,6 +47,15 @@ public class PhysarumManager : MonoBehaviour
     public bool debugParticles = false;
     public bool test = false;
 
+    public RenderTexture trail { 
+        get {
+            if (!_initialized)
+                Initialize();
+
+            return _trail; 
+        }
+    }
+
     private List<PhysarumEmitter> _emittersList;
 
     private RenderTexture _trail;
@@ -62,6 +63,7 @@ public class PhysarumManager : MonoBehaviour
     private RenderTexture _RWStimuli;
     private RenderTexture _RWInfluenceMap;
     private RenderTexture _particleTexture;
+    private RenderTexture _defaultTexture;
     private int _initParticlesKernel, _spawnParticlesKernel, _moveParticlesKernel, _updateTrailKernel, _cleanParticleTexture, _writeParticleTexture, _updateParticleMap, _updateVelocitiesKernel;
     private List<ComputeBuffer> _particleBuffers;
 
@@ -129,11 +131,6 @@ public class PhysarumManager : MonoBehaviour
                 UpdateVelocities();
         }
 
-        if (useVFX) {
-            if (_emittersList.Count > 0)
-                UpdateVFX(0);
-        }
-
         if (debugParticles)
             UpdateParticleTexture();
     }
@@ -164,11 +161,11 @@ public class PhysarumManager : MonoBehaviour
         _writeParticleTexture = shader.FindKernel("WriteParticleTexture");
         _updateParticleMap = shader.FindKernel("UpdateParticleMap");
 
+        InitializeDefaultTexture();
         InitializeTrail();
         InitializeVelocities();
         InitializeStimuli();
         InitializeInfluenceMap();
-        InitializeMaterial();
         InitializeEmitters();
         InitializeParticlesBuffer();
 
@@ -177,11 +174,14 @@ public class PhysarumManager : MonoBehaviour
 
         InitializeFluid();
 
-        if(useVFX)
-            InitializeVFX();
-
         _initialized = true;
     }
+
+    void InitializeDefaultTexture() {
+        _defaultTexture = new RenderTexture(16, 16, 0);
+        _defaultTexture.enableRandomWrite = true;
+        _defaultTexture.Create();
+	}
 
     void InitializeParticles(PhysarumEmitter emitter) {
         // allocate memory for the particles
@@ -283,10 +283,10 @@ public class PhysarumManager : MonoBehaviour
         shader.SetTexture(_moveParticlesKernel, "_InfluenceMap", _RWInfluenceMap);
     }
 
-    void InitializeFluid() {
+    public void InitializeFluid() {
 
-        shader.SetTexture(_moveParticlesKernel, "_FluidTexture", fluidTexture);
-        shader.SetVector("_FluidDimension", new Vector2(fluidTexture.width, fluidTexture.height));
+        shader.SetTexture(_moveParticlesKernel, "_FluidTexture", fluidTexture ? fluidTexture : _defaultTexture);
+        shader.SetVector("_FluidDimension", fluidTexture ? new Vector2(fluidTexture.width, fluidTexture.height) : new Vector2(_defaultTexture.width, _defaultTexture.height));
 	}
 
     void InitializeParticlesBuffer() {
@@ -294,25 +294,6 @@ public class PhysarumManager : MonoBehaviour
         ReleaseParticlesBuffer();
 
         _particleBuffers = new List<ComputeBuffer>();
-    }
-
-    void InitializeMaterial() {
-
-        physarumMaterial.SetTexture("PhysarumTrail", _trail);
-        physarumMaterial.SetTexture("PhysarumStimuli", stimuli);
-    }
-
-    void InitializeVFX() {
-
-        _particlePositionMap = new RenderTexture(vfxTextureSize, vfxTextureSize, 1, RenderTextureFormat.ARGBFloat);
-        _particlePositionMap.enableRandomWrite = true;
-        _particlePositionMap.Create();
-
-        shader.SetVector("_ParticlePositionMapSize", new Vector2(_particlePositionMap.width, _particlePositionMap.height));
-        shader.SetTexture(_updateParticleMap, "_ParticlePositionMap", _particlePositionMap);
-
-        vfx.SetTexture("ParticlePosition", _particlePositionMap);
-        vfx.SetFloat("TextureSize", vfxTextureSize);
     }
 
 	#endregion
@@ -324,6 +305,7 @@ public class PhysarumManager : MonoBehaviour
         _emittersList.Clear();
         ReleaseParticlesBuffer();
 
+        _defaultTexture.Release();
         _trail.Release();
         _velocities.Release();
         _RWStimuli.Release();
@@ -331,9 +313,6 @@ public class PhysarumManager : MonoBehaviour
 
         if (_particleTexture)
             _particleTexture.Release();
-
-        if (useVFX)
-            ReleaseVFX();
 
         _initialized = false;
     }
@@ -350,11 +329,6 @@ public class PhysarumManager : MonoBehaviour
 
         _particleBuffers.Clear();
     }
-
-    void ReleaseVFX() {
-
-        _particlePositionMap.Release();
-	}
 
     #endregion
 
@@ -438,13 +412,6 @@ public class PhysarumManager : MonoBehaviour
             shader.SetBuffer(_writeParticleTexture, "_ParticleBuffer", _particleBuffers[i]);
             shader.Dispatch(_writeParticleTexture, _emittersList[i].capacity / _groupCount, 1, 1);
         }
-    }
-
-    void UpdateVFX(int index) {
-
-        shader.SetBuffer(_updateParticleMap, "_ParticleBuffer", _particleBuffers[index]);
-        shader.Dispatch(_updateParticleMap, _emittersList[index].capacity / _groupCount, 1, 1);
-
     }
 
 	#endregion

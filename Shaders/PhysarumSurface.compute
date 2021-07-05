@@ -245,18 +245,22 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	float2 frontLeftPos 	= pos + float2(cos(angle + sensorAngle), sin(angle + sensorAngle)) * offset;
 	float2 frontRightPos 	= pos + float2(cos(angle - sensorAngle), sin(angle - sensorAngle)) * offset;
 	
-	float2 fluidDirection = ReadFluid(pos).xy;
-
-	//Fluid mean to avoid oscillations
-	//float2 nextFluidDirection = ReadFluid(pos + _EmitterStepSize * fluidDirection).xy;
-	//fluidDirection = (fluidDirection + nextFluidDirection) * 0.5f;
-
-	float fluidAngle = PI + atan(fluidDirection.y / fluidDirection.x);
+	float fluidAngle = 0;
 	float fluidStrength = _FluidStrength;// *(1.0f - _ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime);
+	
+	if (fluidStrength != 0) {
+		float2 fluidDirection = ReadFluid(pos).xy;
 
-	float F 	= ReadTrail(frontPos) + (PI - AngleDifference(angle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle, fluidAngle)) * fluidStrength;
-	float FL 	= ReadTrail(frontLeftPos) + (PI - AngleDifference(angle + sensorAngle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle + sensorAngle, fluidAngle)) * fluidStrength;
-	float FR 	= ReadTrail(frontRightPos) + (PI - AngleDifference(angle - sensorAngle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle - sensorAngle, fluidAngle)) * fluidStrength;
+		//Fluid mean to avoid oscillations
+		//float2 nextFluidDirection = ReadFluid(pos + _EmitterStepSize * fluidDirection).xy;
+		//fluidDirection = (fluidDirection + nextFluidDirection) * 0.5f;
+
+		fluidAngle = PI + atan(fluidDirection.y / fluidDirection.x);
+	}
+
+	float F = ReadTrail(frontPos) + (PI - AngleDifference(angle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle, fluidAngle)) * fluidStrength;
+	float FL = ReadTrail(frontLeftPos) + (PI - AngleDifference(angle + sensorAngle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle + sensorAngle, fluidAngle)) * fluidStrength;
+	float FR = ReadTrail(frontRightPos) + (PI - AngleDifference(angle - sensorAngle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle - sensorAngle, fluidAngle)) * fluidStrength;
 
 	//decide on the next best step
 	if((F > FL) && (F > FR))
