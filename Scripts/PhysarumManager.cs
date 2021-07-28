@@ -22,6 +22,9 @@ public class PhysarumManager : MonoBehaviour
     public RenderTexture fluidTexture;
     public float fluidStrength;
 
+    public bool advectTrailFromFluid = false;
+    public float trailAdvectionFromFluid = 0;
+
     [Header("Velocities Settings")]
     public bool useVelocities = false;
     [Range(0f, 1f)] public float velocitiesDecay = 0.002f;
@@ -52,19 +55,20 @@ public class PhysarumManager : MonoBehaviour
             if (!_initialized)
                 Initialize();
 
-            return _trail; 
+            return _trailRead; 
         }
     }
 
     private List<PhysarumEmitter> _emittersList;
 
-    private RenderTexture _trail;
+    private RenderTexture _trailRead;
+    private RenderTexture _trailWrite;
     private RenderTexture _velocities;
     private RenderTexture _RWStimuli;
     private RenderTexture _RWInfluenceMap;
     private RenderTexture _particleTexture;
     private RenderTexture _defaultTexture;
-    private int _initParticlesKernel, _spawnParticlesKernel, _moveParticlesKernel, _updateTrailKernel, _cleanParticleTexture, _writeParticleTexture, _updateParticleMap, _updateVelocitiesKernel;
+    private int _initParticlesKernel, _spawnParticlesKernel, _moveParticlesKernel, _updateTrailKernel, _advectTrailKernel, _cleanParticleTexture, _writeParticleTexture, _updateParticleMap, _updateVelocitiesKernel;
     private List<ComputeBuffer> _particleBuffers;
 
     private const int _groupCount = 32;       // Group size has to be same with the compute shader group size
@@ -127,6 +131,11 @@ public class PhysarumManager : MonoBehaviour
             UpdateParticles();
             UpdateTrail();
 
+			if (advectTrailFromFluid) {
+                if (trailAdvectionFromFluid != 0)
+                    AdvectTrail();
+			}
+
             if(useVelocities)
                 UpdateVelocities();
         }
@@ -156,6 +165,7 @@ public class PhysarumManager : MonoBehaviour
         _spawnParticlesKernel = shader.FindKernel("SpawnParticles");
         _moveParticlesKernel = shader.FindKernel("MoveParticles");
         _updateTrailKernel = shader.FindKernel("UpdateTrail");
+        _advectTrailKernel = shader.FindKernel("AdvectTrail");
         _updateVelocitiesKernel = shader.FindKernel("UpdateVelocities");
         _cleanParticleTexture = shader.FindKernel("CleanParticleTexture");
         _writeParticleTexture = shader.FindKernel("WriteParticleTexture");
@@ -211,15 +221,23 @@ public class PhysarumManager : MonoBehaviour
 
     void InitializeTrail()
     {
-        _trail = new RenderTexture(trailResolution.x, trailResolution.y, 0, RenderTextureFormat.ARGBFloat);
-        _trail.enableRandomWrite = true;
-        _trail.Create();
+        _trailRead = new RenderTexture(trailResolution.x, trailResolution.y, 0, RenderTextureFormat.ARGBFloat);
+        _trailRead.enableRandomWrite = true;
+        _trailRead.Create();
 
-        shader.SetVector("_TrailDimension", new Vector2(trailResolution.x, trailResolution.y));
+        _trailWrite = new RenderTexture(trailResolution.x, trailResolution.y, 0, RenderTextureFormat.ARGBFloat);
+        _trailWrite.enableRandomWrite = true;
+        _trailWrite.Create();
+
+        shader.SetVector("_TrailResolution", new Vector2(trailResolution.x, trailResolution.y));
         shader.SetVector("_TrailSize", trailSize);
 
-        shader.SetTexture(_moveParticlesKernel, "_TrailBuffer", _trail);
-        shader.SetTexture(_updateTrailKernel, "_TrailBuffer", _trail);
+        shader.SetTexture(_moveParticlesKernel, "_TrailRead", _trailRead);
+        shader.SetTexture(_moveParticlesKernel, "_TrailWrite", _trailWrite);
+        shader.SetTexture(_updateTrailKernel, "_TrailRead", _trailRead);
+        shader.SetTexture(_updateTrailKernel, "_TrailWrite", _trailWrite);
+        shader.SetTexture(_advectTrailKernel, "_TrailRead", _trailRead);
+        shader.SetTexture(_advectTrailKernel, "_TrailWrite", _trailWrite);
     }
 
     void InitializeVelocities() {
@@ -262,7 +280,7 @@ public class PhysarumManager : MonoBehaviour
         }
         shader.SetBool("_StimuliActive", useStimuli);
         shader.SetTexture(_moveParticlesKernel, "_Stimuli", _RWStimuli);
-        shader.SetVector("_StimuliDimension", new Vector2(_RWStimuli.width, _RWStimuli.height));
+        shader.SetVector("_StimuliResolution", new Vector2(_RWStimuli.width, _RWStimuli.height));
     }
 
     public void InitializeInfluenceMap() {
@@ -286,7 +304,8 @@ public class PhysarumManager : MonoBehaviour
     public void InitializeFluid() {
 
         shader.SetTexture(_moveParticlesKernel, "_FluidTexture", fluidTexture ? fluidTexture : _defaultTexture);
-        shader.SetVector("_FluidDimension", fluidTexture ? new Vector2(fluidTexture.width, fluidTexture.height) : new Vector2(_defaultTexture.width, _defaultTexture.height));
+        shader.SetTexture(_advectTrailKernel, "_FluidTexture", fluidTexture ? fluidTexture : _defaultTexture);
+        shader.SetVector("_FluidResolution", fluidTexture ? new Vector2(fluidTexture.width, fluidTexture.height) : new Vector2(_defaultTexture.width, _defaultTexture.height));
 	}
 
     void InitializeParticlesBuffer() {
@@ -306,7 +325,8 @@ public class PhysarumManager : MonoBehaviour
         ReleaseParticlesBuffer();
 
         _defaultTexture.Release();
-        _trail.Release();
+        _trailRead.Release();
+        _trailWrite.Release();
         _velocities.Release();
         _RWStimuli.Release();
         _RWInfluenceMap.Release();
@@ -390,6 +410,8 @@ public class PhysarumManager : MonoBehaviour
         shader.SetBuffer(_moveParticlesKernel, "_ParticleBuffer", _particleBuffers[index]);
 
         shader.Dispatch(_moveParticlesKernel, _emittersList[index].capacity / _groupCount, 1, 1);
+
+        SwapTrailTextures();
     }
 
     void UpdateTrail()
@@ -397,6 +419,16 @@ public class PhysarumManager : MonoBehaviour
         shader.SetFloat("_Decay", decay);
         shader.SetVector("_Gravity", new Vector2(Mathf.Cos(gravityAngle * Mathf.Deg2Rad), Mathf.Sin(gravityAngle * Mathf.Deg2Rad)) * gravityStrength);
         shader.Dispatch(_updateTrailKernel, trailResolution.x / _groupCount, trailResolution.y / _groupCount, 1);
+
+        SwapTrailTextures();
+    }
+
+    void AdvectTrail() {
+
+        shader.SetFloat("_FluidAdvection", trailAdvectionFromFluid);
+        shader.Dispatch(_advectTrailKernel, trailResolution.x / _groupCount, trailResolution.y / _groupCount, 1);
+
+        SwapTrailTextures();
     }
 
     void UpdateVelocities() {
@@ -413,6 +445,11 @@ public class PhysarumManager : MonoBehaviour
             shader.Dispatch(_writeParticleTexture, _emittersList[i].capacity / _groupCount, 1, 1);
         }
     }
+
+    void SwapTrailTextures() {
+
+        Graphics.Blit(_trailWrite, _trailRead);
+	}
 
 	#endregion
 

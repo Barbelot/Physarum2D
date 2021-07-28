@@ -9,6 +9,7 @@
 #pragma kernel SpawnParticles
 #pragma kernel MoveParticles
 #pragma kernel UpdateTrail
+#pragma kernel AdvectTrail
 #pragma kernel UpdateVelocities
 #pragma kernel CleanParticleTexture
 #pragma kernel WriteParticleTexture
@@ -26,13 +27,13 @@ struct Particle
 	float stimuliIntensity;
 };
 
-float2 _TrailDimension;
+float2 _TrailResolution;
 float2 _TrailSize;
 float _Decay;
 float _VelocitiesDecay;
 
 bool _StimuliActive;
-float2 _StimuliDimension;
+float2 _StimuliResolution;
 float _StimuliIntensity;
 bool _StimuliToColor;
 
@@ -40,7 +41,8 @@ float _DeltaTime;
 float _AbsoluteTime;
 
 RWStructuredBuffer<Particle> _ParticleBuffer;
-RWTexture2D<float4> _TrailBuffer;
+Texture2D<float4> _TrailRead;
+RWTexture2D<float4> _TrailWrite;
 RWTexture2D<float4> _VelocitiesBuffer;
 RWTexture2D<float4> _Stimuli;
 RWTexture2D<float4> _ParticleTexture;
@@ -71,8 +73,9 @@ float _DirectionAngle;
 float _DirectionStrength;
 
 Texture2D<float4> _FluidTexture;
-float2 _FluidDimension;
+float2 _FluidResolution;
 float _FluidStrength;
+float _FluidAdvection;
 
 bool _UseInfluenceMap;
 Texture2D<float4> _InfluenceMap;
@@ -135,17 +138,17 @@ float ReadStimuli(float2 pos) {
 	float2 posUV = GetUVFromPosition(pos);
 
 	//value.rgb += _Stimuli[id.xy].rgb * _WProj;
-	return (0.299 * _Stimuli[posUV * _StimuliDimension.xy].x + 0.587 * _Stimuli[posUV * _StimuliDimension.xy].y + 0.114 * _Stimuli[posUV * _StimuliDimension.xy].z);
+	return (0.299 * _Stimuli[posUV * _StimuliResolution.xy].x + 0.587 * _Stimuli[posUV * _StimuliResolution.xy].y + 0.114 * _Stimuli[posUV * _StimuliResolution.xy].z);
 }
 
 float ReadTrail(float2 pos) {
 
 	float2 posUV = GetUVFromPosition(pos);
-	float value = _TrailBuffer[posUV * _TrailDimension.xy].w;
+	float value = _TrailRead[posUV * _TrailResolution.xy].w;
 
 	if (_StimuliActive) {
 		//value.rgb += _Stimuli[id.xy].rgb * _WProj;
-		value += (0.299 * _Stimuli[posUV * _StimuliDimension.xy].x + 0.587 * _Stimuli[posUV * _StimuliDimension.xy].y + 0.114 * _Stimuli[posUV * _StimuliDimension.xy].z) * _StimuliIntensity;
+		value += (0.299 * _Stimuli[posUV * _StimuliResolution.xy].x + 0.587 * _Stimuli[posUV * _StimuliResolution.xy].y + 0.114 * _Stimuli[posUV * _StimuliResolution.xy].z) * _StimuliIntensity;
 	}
 
 	return value;
@@ -183,6 +186,27 @@ float4 GetColorFromGradient(float time) {
 	}
 
 	return color;
+}
+
+float4 BilinearSampling(RWTexture2D<float4> tex, float2 uv, float2 texResolution) {
+
+	const float2 pos = uv * texResolution;
+	const int2 zero = int2(0, 0);
+	const int2 SizeBounds = int2(texResolution.x - 1, texResolution.y - 1);
+	const int2 top_right = clamp(ceil(pos), zero, SizeBounds);
+	const int2 bottom_left = clamp(floor(pos), zero, SizeBounds);
+
+	const float2 delta = pos - bottom_left;
+
+	const float4 lt = tex[uint2(bottom_left.x, top_right.y)];
+	const float4 rt = tex[uint2(top_right.x, top_right.y)];
+
+	const float4 lb = tex[uint2(bottom_left.x, bottom_left.y)];
+	const float4 rb = tex[uint2(top_right.x, bottom_left.y)];
+
+	const float4 h1 = lerp(lt, rt, delta.x);
+	const float4 h2 = lerp(lb, rb, delta.x);
+	return lerp(h2, h1, delta.y);
 }
 
 /**********************
@@ -255,7 +279,18 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 		//float2 nextFluidDirection = ReadFluid(pos + _EmitterStepSize * fluidDirection).xy;
 		//fluidDirection = (fluidDirection + nextFluidDirection) * 0.5f;
 
-		fluidAngle = PI + atan(fluidDirection.y / fluidDirection.x);
+		if (fluidDirection.x > 0) {
+			if (fluidDirection.y > 0) {
+				fluidAngle = atan(fluidDirection.y / fluidDirection.x);
+			}
+			else {
+				fluidAngle = PI * 2 + atan(fluidDirection.y / fluidDirection.x);
+			}
+		}
+		else {
+			fluidAngle = PI + atan(fluidDirection.y / fluidDirection.x);
+		}
+		
 	}
 
 	float F = ReadTrail(frontPos) + (PI - AngleDifference(angle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle, fluidAngle)) * fluidStrength;
@@ -296,13 +331,13 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 
 	_ParticleBuffer[id.x].position = nextPos;
 	
-	uint2 nextPosCoords = GetUVFromPosition(nextPos) * _TrailDimension.xy;
+	uint2 nextPosCoords = GetUVFromPosition(nextPos) * _TrailResolution.xy;
 
 	//if the particle moved, leave a mark in the trail buffer
 	if(distance(nextPos, pos) > 0.0001)
 	{
 		//_TrailBuffer[nextPosCoords] += _ParticleBuffer[id.x].color;	//Additive
-		_TrailBuffer[nextPosCoords] = max(_ParticleBuffer[id.x].color, _TrailBuffer[nextPosCoords]);	//Max
+		_TrailWrite[nextPosCoords] = max(_ParticleBuffer[id.x].color, _TrailRead[nextPosCoords]);	//Max
 		//_TrailBuffer[nextPosCoords] = _ParticleBuffer[id.x].color;
 		//_TrailBuffer[nextPosCoords] = lerp(max(_ParticleBuffer[id.x].color, _TrailBuffer[nextPosCoords]), _ParticleBuffer[id.x].color, 0.5f);
 	}
@@ -323,24 +358,34 @@ void UpdateTrail (uint3 id : SV_DISPATCHTHREADID)
 {
 
 	uint2 sampleId = id.xy +_Gravity;
-	float4 value = _TrailBuffer[sampleId];
+	float4 value = _TrailRead[sampleId];
 	
 	float3 d = float3(1, -1, 0.0);
 
 	//mean filter
 	value = value;
-	value += _TrailBuffer[sampleId - d.xx]; // -1,-1
-	value += _TrailBuffer[sampleId - d.zx]; // 0, -1
-	value += _TrailBuffer[sampleId - d.yx]; // +1, -1
-	value += _TrailBuffer[sampleId - d.xz]; // -1, 0
-	value += _TrailBuffer[sampleId + d.xz]; // +1, 0
-	value += _TrailBuffer[sampleId + d.yx]; // -1, +1
-	value += _TrailBuffer[sampleId + d.zx]; // 0, +1
-	value += _TrailBuffer[sampleId + d.xx]; // +1, +1
+	value += _TrailRead[sampleId - d.xx]; // -1,-1
+	value += _TrailRead[sampleId - d.zx]; // 0, -1
+	value += _TrailRead[sampleId - d.yx]; // +1, -1
+	value += _TrailRead[sampleId - d.xz]; // -1, 0
+	value += _TrailRead[sampleId + d.xz]; // +1, 0
+	value += _TrailRead[sampleId + d.yx]; // -1, +1
+	value += _TrailRead[sampleId + d.zx]; // 0, +1
+	value += _TrailRead[sampleId + d.xx]; // +1, +1
 	
 	value = (value / 9) * (1-_Decay);
 
-	_TrailBuffer[id.xy] = value;
+	_TrailWrite[id.xy] = value;
+}
+
+[numthreads(NUM_THREADS, NUM_THREADS, 1)]
+void AdvectTrail(uint3 id : SV_DISPATCHTHREADID)
+{
+	float2 uv = (id.xy + float2(0.5f, 0.5f)) / _TrailResolution;
+
+	float2 fluidValue = _FluidTexture.SampleLevel(linearClampSampler, uv, 0).xy;
+
+	_TrailWrite[id.xy] = _TrailRead.SampleLevel(linearClampSampler, uv + fluidValue * _FluidAdvection, 0);
 }
 
 [numthreads(NUM_THREADS, NUM_THREADS, 1)]
@@ -378,7 +423,7 @@ void CleanParticleTexture(uint3 id : SV_DISPATCHTHREADID)
 void WriteParticleTexture(uint3 id : SV_DISPATCHTHREADID)
 {
 	if(_ParticleBuffer[id.x].age >= 0)
-		_ParticleTexture[GetUVFromPosition(_ParticleBuffer[id.x].position) * _TrailDimension.xy] = float4(1, 1, 1, 1) * (1.0f - _ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime);
+		_ParticleTexture[GetUVFromPosition(_ParticleBuffer[id.x].position) * _TrailResolution.xy] = float4(1, 1, 1, 1) * (1.0f - _ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime);
 }
 
 [numthreads(NUM_THREADS, 1, 1)]
