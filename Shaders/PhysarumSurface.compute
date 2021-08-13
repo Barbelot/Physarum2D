@@ -336,10 +336,10 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	//if the particle moved, leave a mark in the trail buffer
 	if(distance(nextPos, pos) > 0.0001)
 	{
-		//_TrailBuffer[nextPosCoords] += _ParticleBuffer[id.x].color;	//Additive
-		_TrailWrite[nextPosCoords] = max(_ParticleBuffer[id.x].color, _TrailRead[nextPosCoords]);	//Max
-		//_TrailBuffer[nextPosCoords] = _ParticleBuffer[id.x].color;
-		//_TrailBuffer[nextPosCoords] = lerp(max(_ParticleBuffer[id.x].color, _TrailBuffer[nextPosCoords]), _ParticleBuffer[id.x].color, 0.5f);
+		_TrailWrite[nextPosCoords] += _ParticleBuffer[id.x].color * 0.01f;	//Additive
+		//_TrailWrite[nextPosCoords] = max(_ParticleBuffer[id.x].color, _TrailRead[nextPosCoords]);	//Max
+		//_TrailWrite[nextPosCoords] = _ParticleBuffer[id.x].color; //Replace
+		//_TrailWrite[nextPosCoords] = lerp(max(_ParticleBuffer[id.x].color, _TrailRead[nextPosCoords]), _ParticleBuffer[id.x].color, 0.5f);
 	}
 	
 	_ParticleBuffer[id.x].angle = angle;
