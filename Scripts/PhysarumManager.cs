@@ -263,25 +263,23 @@ public class PhysarumManager : MonoBehaviour
 
 	public void InitializeStimuli()
     {
-        if (_RWStimuli != null)
-            _RWStimuli.Release();
+		if (_RWStimuli != null)
+			_RWStimuli.Release();
 
-        if (stimuli == null)
-        {
-            _RWStimuli = new RenderTexture(trailResolution.x, trailResolution.y, 0);
-            _RWStimuli.enableRandomWrite = true;
-            _RWStimuli.Create();
-        }
-        else
-        {
-            _RWStimuli = new RenderTexture(stimuli.width, stimuli.height, 0);
-            _RWStimuli.enableRandomWrite = true;
-            Graphics.Blit(stimuli, _RWStimuli);
-        }
-        shader.SetBool("_StimuliActive", useStimuli);
-        shader.SetTexture(_moveParticlesKernel, "_Stimuli", _RWStimuli);
-        shader.SetVector("_StimuliResolution", new Vector2(_RWStimuli.width, _RWStimuli.height));
-    }
+		if (stimuli == null) {
+			_RWStimuli = new RenderTexture(trailResolution.x, trailResolution.y, 0);
+			_RWStimuli.enableRandomWrite = true;
+			_RWStimuli.Create();
+		} else {
+			_RWStimuli = new RenderTexture(stimuli.width, stimuli.height, 0);
+			_RWStimuli.enableRandomWrite = true;
+			Graphics.Blit(stimuli, _RWStimuli);
+		}
+		shader.SetBool("_StimuliActive", useStimuli);
+		shader.SetTexture(_moveParticlesKernel, "_Stimuli", _RWStimuli);
+        shader.SetTexture(_spawnParticlesKernel, "_Stimuli", _RWStimuli);
+		shader.SetVector("_StimuliResolution", new Vector2(_RWStimuli.width, _RWStimuli.height));
+	}
 
     public void InitializeInfluenceMap() {
 
@@ -377,6 +375,7 @@ public class PhysarumManager : MonoBehaviour
         shader.SetVector("_EmitterSecondaryColor", _emittersList[index].secondaryColor);
         shader.SetFloat("_EmitterSecondaryColorProbability", _emittersList[index].secondaryColorProbability);
         shader.SetBool("_EmitterUseColorOverLife", _emittersList[index].useColorOverLife);
+        shader.SetBool("_EmitterSpawnInStimuliOnly", _emittersList[index].spawnInStimuliOnly);
 
         if (_emittersList[index].useColorOverLife) {
             UpdateColorOverLife(index);

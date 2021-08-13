@@ -16,8 +16,9 @@ public class PhysarumEmitter : MonoBehaviour
 	[Header("Emission")]
 	public int capacity = 2000000;
 	public float spawnRate = 100000;
-	public bool useSpawnOverDistance;
+	public bool useSpawnOverDistance = false;
 	public float spawnRateOverDistance;
+	public bool spawnInStimuliOnly = false;
 
 	[Header("Lifetime")]
 	public Vector2 lifetimeMinMax = new Vector2(5, 15);

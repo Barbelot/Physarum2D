@@ -44,7 +44,7 @@ RWStructuredBuffer<Particle> _ParticleBuffer;
 Texture2D<float4> _TrailRead;
 RWTexture2D<float4> _TrailWrite;
 RWTexture2D<float4> _VelocitiesBuffer;
-RWTexture2D<float4> _Stimuli;
+Texture2D<float4> _Stimuli;
 RWTexture2D<float4> _ParticleTexture;
 RWTexture2D<float4> _ParticlePositionMap;
 
@@ -59,6 +59,7 @@ float _EmitterSecondaryColorProbability;
 float2 _EmitterLifetimeMinMax;
 bool _EmitterUseColorOverLife;
 float4 _EmitterColorOverLife[GRADIENT_LENGTH];
+bool _EmitterSpawnInStimuliOnly;
 
 float _EmitterSensorAngle;
 //float _EmitterRotationAngle;
@@ -227,7 +228,15 @@ void SpawnParticles(uint3 id: SV_DISPATCHTHREADID)
 	if (_ParticleBuffer[id.x].age < 0 && Random(id.x + _AbsoluteTime * 1000) < _EmitterSpawnRate * _DeltaTime / _EmitterCapacity) {
 		InitParticle(id);
 		_ParticleBuffer[id.x].age = 0;
+
+		//Check with stimuli
+		if (_EmitterSpawnInStimuliOnly) {
+			if (Random(id.x + 943) > ReadStimuli(_ParticleBuffer[id.x].position))
+				_ParticleBuffer[id.x].age = -1;
+		}
 	}
+
+
 
 	//Did not spawn, ignore
 	if (_ParticleBuffer[id.x].age < 0)
