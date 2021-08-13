@@ -64,7 +64,6 @@ public class PhysarumManager : MonoBehaviour
     private RenderTexture _trailRead;
     private RenderTexture _trailWrite;
     private RenderTexture _velocities;
-    private RenderTexture _RWStimuli;
     private RenderTexture _RWInfluenceMap;
     private RenderTexture _particleTexture;
     private RenderTexture _defaultTexture;
@@ -128,6 +127,7 @@ public class PhysarumManager : MonoBehaviour
         //Debug.Log("Doing " + updates + " updates");
 
         for (int i = 0; i < updatesPerFrame; i++) {
+            UpdateStimuli();
             UpdateParticles();
             UpdateTrail();
 
@@ -263,22 +263,14 @@ public class PhysarumManager : MonoBehaviour
 
 	public void InitializeStimuli()
     {
-		if (_RWStimuli != null)
-			_RWStimuli.Release();
-
 		if (stimuli == null) {
-			_RWStimuli = new RenderTexture(trailResolution.x, trailResolution.y, 0);
-			_RWStimuli.enableRandomWrite = true;
-			_RWStimuli.Create();
-		} else {
-			_RWStimuli = new RenderTexture(stimuli.width, stimuli.height, 0);
-			_RWStimuli.enableRandomWrite = true;
-			Graphics.Blit(stimuli, _RWStimuli);
+            stimuli = _defaultTexture;
 		}
+
 		shader.SetBool("_StimuliActive", useStimuli);
-		shader.SetTexture(_moveParticlesKernel, "_Stimuli", _RWStimuli);
-        shader.SetTexture(_spawnParticlesKernel, "_Stimuli", _RWStimuli);
-		shader.SetVector("_StimuliResolution", new Vector2(_RWStimuli.width, _RWStimuli.height));
+		shader.SetTexture(_moveParticlesKernel, "_Stimuli", stimuli);
+        shader.SetTexture(_spawnParticlesKernel, "_Stimuli", stimuli);
+		shader.SetVector("_StimuliResolution", new Vector2(stimuli.width, stimuli.height));
 	}
 
     public void InitializeInfluenceMap() {
@@ -326,7 +318,6 @@ public class PhysarumManager : MonoBehaviour
         _trailRead.Release();
         _trailWrite.Release();
         _velocities.Release();
-        _RWStimuli.Release();
         _RWInfluenceMap.Release();
 
         if (_particleTexture)
@@ -444,6 +435,11 @@ public class PhysarumManager : MonoBehaviour
             shader.Dispatch(_writeParticleTexture, _emittersList[i].capacity / _groupCount, 1, 1);
         }
     }
+
+    void UpdateStimuli() {
+
+        InitializeStimuli();
+	}
 
     void SwapTrailTextures() {
 
