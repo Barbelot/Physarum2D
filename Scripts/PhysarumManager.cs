@@ -382,8 +382,8 @@ public class PhysarumManager : MonoBehaviour
 
         shader.SetFloat("_EmitterSensorAngle", _emittersList[index].sensorAngleDegrees * Mathf.Deg2Rad);
         //shader.SetFloat("_RotationAngle", rotationAngle);
-        shader.SetFloat("_EmitterSensorOffsetDistance", _emittersList[index].sensorOffsetDistance);
-        shader.SetFloat("_EmitterStepSize", _emittersList[index].stepSize * Time.deltaTime);
+        shader.SetFloat("_EmitterSensorOffsetDistance", _emittersList[index].propagationScale);
+        shader.SetFloat("_EmitterStepSize", _emittersList[index].propagationScale * Time.deltaTime);
         shader.SetBool("_StimuliActive", useStimuli);
         shader.SetFloat("_StimuliIntensity", stimuliIntensity);
         shader.SetBool("_StimuliToColor", colorFromStimuli);
