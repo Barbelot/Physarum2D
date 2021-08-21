@@ -25,11 +25,12 @@ public class PhysarumEmitter : MonoBehaviour
 	[Header("Size")]
 	public float radius = 0.1f;
 	[Header("Color")]
+	public float colorIntensity = 1;
 	[ColorUsage(true, true)] public Color mainColor = Color.white;
 	[ColorUsage(true, true)] public Color secondaryColor = Color.red;
 	[Range(0, 1)] public float secondaryColorProbability = 0.5f;
-	public bool useColorOverLife = false;
-	[GradientUsage(true, ColorSpace.Linear)] public Gradient colorOverLife;
+	[Tooltip("The color over life is multiplied with the main or secondary color.")] public bool useColorOverLife = false;
+	[Tooltip("The color over life is multiplied with the main or secondary color.")][GradientUsage(true, ColorSpace.Linear)] public Gradient colorOverLife;
 
 	[Header("Propagation")]
 	[Range(0, 180f)] public float sensorAngleDegrees = 10f;     //in degrees

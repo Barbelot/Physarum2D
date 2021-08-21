@@ -30,6 +30,7 @@ struct Particle
 float2 _TrailResolution;
 float2 _TrailSize;
 float _Decay;
+float _RepulsionLimit;
 float _VelocitiesDecay;
 
 bool _StimuliActive;
@@ -53,6 +54,7 @@ float2 _EmitterPreviousPosition;
 float _EmitterRadius;
 float _EmitterSpawnRate;
 int _EmitterCapacity;
+float _EmitterColorIntensity;
 float4 _EmitterMainColor;
 float4 _EmitterSecondaryColor;
 float _EmitterSecondaryColorProbability;
@@ -123,7 +125,7 @@ void InitParticle(uint3 id) {
 	_ParticleBuffer[id.x].age = -1;
 	_ParticleBuffer[id.x].stimuliIntensity = 0;
 
-	_ParticleBuffer[id.x].color = Random(id.x + 288) < _EmitterSecondaryColorProbability ? _EmitterSecondaryColor : _EmitterMainColor;
+	_ParticleBuffer[id.x].color = (Random(id.x + 288) < _EmitterSecondaryColorProbability ? _EmitterSecondaryColor : _EmitterMainColor) * _EmitterColorIntensity;
 
 	if (_EmitterUseColorOverLife)
 		_ParticleBuffer[id.x].color *= _EmitterColorOverLife[0];
@@ -152,7 +154,7 @@ float ReadTrail(float2 pos) {
 		value += (0.299 * _Stimuli[posUV * _StimuliResolution.xy].x + 0.587 * _Stimuli[posUV * _StimuliResolution.xy].y + 0.114 * _Stimuli[posUV * _StimuliResolution.xy].z) * _StimuliIntensity;
 	}
 
-	return value;
+	return value <= _RepulsionLimit ? value : 0.0f;
 }
 
 float4 ReadInfluenceMap(float2 pos) {
@@ -247,7 +249,7 @@ void SpawnParticles(uint3 id: SV_DISPATCHTHREADID)
 
 	//Update color
 	if (_EmitterUseColorOverLife) {
-		_ParticleBuffer[id.x].color = Random(id.x + 288) < _EmitterSecondaryColorProbability ? _EmitterSecondaryColor : _EmitterMainColor;
+		_ParticleBuffer[id.x].color = (Random(id.x + 288) < _EmitterSecondaryColorProbability ? _EmitterSecondaryColor : _EmitterMainColor) * _EmitterColorIntensity;
 		_ParticleBuffer[id.x].color *= GetColorFromGradient(_ParticleBuffer[id.x].age / _ParticleBuffer[id.x].lifetime);
 	}
 

@@ -17,6 +17,7 @@ public class PhysarumManager : MonoBehaviour
     public Vector2Int trailResolution = Vector2Int.one * 2048;
     public Vector2 trailSize = Vector2.one;
     [Range(0f, 1f)] public float decay = 0.002f;
+    [Range(0f, 2f)] public float trailRepulsionLimit = 0.5f;
 
     [Header("Fluid")]
     public RenderTexture fluidTexture;
@@ -211,6 +212,7 @@ public class PhysarumManager : MonoBehaviour
         shader.SetVector("_EmitterPreviousPosition", emitter.previousPosition);
         shader.SetFloat("_EmitterRadius", emitter.radius);
         shader.SetFloat("_EmitterSpawnRate", emitter.spawnRate);
+        shader.SetFloat("_EmitterColorIntensity", emitter.colorIntensity);
         shader.SetVector("_EmitterMainColor", emitter.mainColor);
         shader.SetVector("_EmitterSecondaryColor", emitter.secondaryColor);
         shader.SetFloat("_EmitterSecondaryColorProbability", emitter.secondaryColorProbability);
@@ -362,6 +364,7 @@ public class PhysarumManager : MonoBehaviour
         shader.SetVector("_EmitterPreviousPosition", _emittersList[index].previousPosition);
         shader.SetFloat("_EmitterRadius", _emittersList[index].radius);
         shader.SetFloat("_EmitterSpawnRate", _emittersList[index].spawnRate);
+        shader.SetFloat("_EmitterColorIntensity", _emittersList[index].colorIntensity);
         shader.SetVector("_EmitterMainColor", _emittersList[index].mainColor);
         shader.SetVector("_EmitterSecondaryColor", _emittersList[index].secondaryColor);
         shader.SetFloat("_EmitterSecondaryColorProbability", _emittersList[index].secondaryColorProbability);
@@ -407,6 +410,7 @@ public class PhysarumManager : MonoBehaviour
     void UpdateTrail()
     {
         shader.SetFloat("_Decay", decay);
+        shader.SetFloat("_RepulsionLimit", trailRepulsionLimit);
         shader.SetVector("_Gravity", new Vector2(Mathf.Cos(gravityAngle * Mathf.Deg2Rad), Mathf.Sin(gravityAngle * Mathf.Deg2Rad)) * gravityStrength);
         shader.Dispatch(_updateTrailKernel, trailResolution.x / _groupCount, trailResolution.y / _groupCount, 1);
 
