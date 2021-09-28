@@ -29,7 +29,7 @@ public class PhysarumEmitter : MonoBehaviour
 	[ColorUsage(true, true)] public Color mainColor = Color.white;
 	[ColorUsage(true, true)] public Color secondaryColor = Color.red;
 	[Range(0, 1)] public float secondaryColorProbability = 0.5f;
-	[Tooltip("The color over life is multiplied with the main or secondary color.")] public bool useColorOverLife = false;
+	[Tooltip("The color over life is multiplied with the main or secondary color.")] public bool useColorOverLife = true;
 	[Tooltip("The color over life is multiplied with the main or secondary color.")][GradientUsage(true, ColorSpace.Linear)] public Gradient colorOverLife;
 
 	[Header("Propagation")]

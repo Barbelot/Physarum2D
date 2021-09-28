@@ -101,6 +101,9 @@ public class PhysarumManager : MonoBehaviour
     private float _gradientStepSize;
     private Vector4[] _colorOverLife;
 
+    private int _groupsCountX;
+    private int _groupsCountY;
+
     private bool _initialized = false;
 
 	#region MonoBehaviour Functions
@@ -162,6 +165,9 @@ public class PhysarumManager : MonoBehaviour
             return;
         }
 
+        _groupsCountX = Mathf.CeilToInt((float)trailResolution.x / _groupCount);
+        _groupsCountY = Mathf.CeilToInt((float)trailResolution.y / _groupCount);
+
         _initParticlesKernel = shader.FindKernel("InitParticles");
         _spawnParticlesKernel = shader.FindKernel("SpawnParticles");
         _moveParticlesKernel = shader.FindKernel("MoveParticles");
@@ -218,7 +224,7 @@ public class PhysarumManager : MonoBehaviour
         shader.SetFloat("_EmitterSecondaryColorProbability", emitter.secondaryColorProbability);
         shader.SetBuffer(_initParticlesKernel, "_ParticleBuffer", particleBuffer);
 
-        shader.Dispatch(_initParticlesKernel, emitter.capacity / _groupCount, 1, 1);
+        shader.Dispatch(_initParticlesKernel, Mathf.CeilToInt((float)emitter.capacity / _groupCount), 1, 1);
     }
 
     void InitializeTrail()
@@ -378,7 +384,7 @@ public class PhysarumManager : MonoBehaviour
 
         shader.SetBuffer(_spawnParticlesKernel, "_ParticleBuffer", _particleBuffers[index]);
 
-        shader.Dispatch(_spawnParticlesKernel, _emittersList[index].capacity / _groupCount, 1, 1);
+        shader.Dispatch(_spawnParticlesKernel, Mathf.CeilToInt((float)_emittersList[index].capacity / _groupCount), 1, 1);
     }
 
     void MoveParticles(int index) {
@@ -402,7 +408,7 @@ public class PhysarumManager : MonoBehaviour
 
         shader.SetBuffer(_moveParticlesKernel, "_ParticleBuffer", _particleBuffers[index]);
 
-        shader.Dispatch(_moveParticlesKernel, _emittersList[index].capacity / _groupCount, 1, 1);
+        shader.Dispatch(_moveParticlesKernel, Mathf.CeilToInt((float)_emittersList[index].capacity / _groupCount), 1, 1);
 
         SwapTrailTextures();
     }
@@ -412,7 +418,7 @@ public class PhysarumManager : MonoBehaviour
         shader.SetFloat("_Decay", decay);
         shader.SetFloat("_RepulsionLimit", trailRepulsionLimit);
         shader.SetVector("_Gravity", new Vector2(Mathf.Cos(gravityAngle * Mathf.Deg2Rad), Mathf.Sin(gravityAngle * Mathf.Deg2Rad)) * gravityStrength);
-        shader.Dispatch(_updateTrailKernel, trailResolution.x / _groupCount, trailResolution.y / _groupCount, 1);
+        shader.Dispatch(_updateTrailKernel, _groupsCountX, _groupsCountY, 1);
 
         SwapTrailTextures();
     }
@@ -420,23 +426,23 @@ public class PhysarumManager : MonoBehaviour
     void AdvectTrail() {
 
         shader.SetFloat("_FluidAdvection", trailAdvectionFromFluid);
-        shader.Dispatch(_advectTrailKernel, trailResolution.x / _groupCount, trailResolution.y / _groupCount, 1);
+        shader.Dispatch(_advectTrailKernel, _groupsCountX, _groupsCountY, 1);
 
         SwapTrailTextures();
     }
 
     void UpdateVelocities() {
         shader.SetFloat("_VelocitiesDecay", velocitiesDecay);
-        shader.Dispatch(_updateVelocitiesKernel, trailResolution.x / _groupCount, trailResolution.y / _groupCount, 1);
+        shader.Dispatch(_updateVelocitiesKernel, _groupsCountX, _groupsCountY, 1);
     }
 
     void UpdateParticleTexture() {
 
-        shader.Dispatch(_cleanParticleTexture, trailResolution.x / _groupCount, trailResolution.y / _groupCount, 1);
+        shader.Dispatch(_cleanParticleTexture, _groupsCountX, _groupsCountY, 1);
 
         for (int i = 0; i < _particleBuffers.Count; i++) {
             shader.SetBuffer(_writeParticleTexture, "_ParticleBuffer", _particleBuffers[i]);
-            shader.Dispatch(_writeParticleTexture, _emittersList[i].capacity / _groupCount, 1, 1);
+            shader.Dispatch(_writeParticleTexture, Mathf.CeilToInt((float)_emittersList[i].capacity / _groupCount), 1, 1);
         }
     }
 
