@@ -1,4 +1,5 @@
-﻿#define PI 3.14159265359
+﻿#define HALFPI 1.57079632679
+#define PI 3.14159265359
 #define TWOPI 6.28318530718
 #define DEG2RAD 0.01745329251
 
@@ -52,6 +53,10 @@ RWTexture2D<float4> _ParticlePositionMap;
 float2 _EmitterPosition;
 float2 _EmitterPreviousPosition;
 float _EmitterRadius;
+float _EmitterRadiusWidth;
+float _EmitterArcLength;
+float _EmitterArcOffset;
+float _EmitterArcFeathering;
 float _EmitterSpawnRate;
 int _EmitterCapacity;
 float _EmitterColorIntensity;
@@ -117,9 +122,30 @@ float2 RandomInsideCircle(uint seed, float2 center, float radius) {
 	return float2(cos(randomAngle), sin(randomAngle)) * radius * Random(seed + 1) + center;
 }
 
+float2 RandomOnCircle(uint seed, float2 center, float radius, float width, float arcLength, float arcOffset, float arcFeathering) {
+
+	float rand = Random(seed);
+
+	//Remap in [-1, 1]
+	rand = rand * 2 - 1;
+
+	//Feathering
+	rand = lerp(rand, rand * rand * rand, arcFeathering);
+
+	float randomAngle = rand * 0.5f * arcLength + arcOffset;
+
+	if (width >= radius) {
+		return float2(cos(randomAngle), sin(randomAngle)) * radius * Random(seed + 1) + center;
+	}
+	else {
+		return float2(cos(randomAngle), sin(randomAngle)) * (radius + lerp(-width * lerp(1, (1.0f - abs(rand)), arcFeathering), 0, Random(seed + 1))) + center;
+	}
+}
+
 void InitParticle(uint3 id) {
 
-	_ParticleBuffer[id.x].position = RandomInsideCircle(id.x + 45, lerp(_EmitterPreviousPosition, _EmitterPosition, Random(id.x + 912)), _EmitterRadius);
+	//_ParticleBuffer[id.x].position = RandomInsideCircle(id.x + 45, lerp(_EmitterPreviousPosition, _EmitterPosition, Random(id.x + 912)), _EmitterRadius);
+	_ParticleBuffer[id.x].position = RandomOnCircle(id.x + 45, lerp(_EmitterPreviousPosition, _EmitterPosition, Random(id.x + 912)), _EmitterRadius, _EmitterRadiusWidth, _EmitterArcLength, _EmitterArcOffset, _EmitterArcFeathering);
 	_ParticleBuffer[id.x].angle = Random(id.x + 2) * TWOPI;
 	_ParticleBuffer[id.x].lifetime = Random(id.x + 781)* (_EmitterLifetimeMinMax.y - _EmitterLifetimeMinMax.x) + _EmitterLifetimeMinMax.x;
 	_ParticleBuffer[id.x].age = -1;
@@ -225,9 +251,8 @@ void InitParticles(uint3 id: SV_DISPATCHTHREADID)
 [numthreads(NUM_THREADS, 1, 1)]
 void SpawnParticles(uint3 id: SV_DISPATCHTHREADID)
 {
-
 	//Spawn
-	if (_ParticleBuffer[id.x].age < 0 && Random(id.x + _AbsoluteTime * 1000) < _EmitterSpawnRate * _DeltaTime / _EmitterCapacity) {
+	if (_ParticleBuffer[id.x].age < 0 && Random(id.x + _AbsoluteTime * 1000) < _EmitterSpawnRate * _DeltaTime * _EmitterArcLength / _EmitterCapacity) {
 		InitParticle(id);
 		_ParticleBuffer[id.x].age = 0;
 
@@ -301,12 +326,29 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 		else {
 			fluidAngle = PI + atan(fluidDirection.y / fluidDirection.x);
 		}
-		
 	}
 
-	float F = ReadTrail(frontPos) + (PI - AngleDifference(angle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle, fluidAngle)) * fluidStrength;
-	float FL = ReadTrail(frontLeftPos) + (PI - AngleDifference(angle + sensorAngle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle + sensorAngle, fluidAngle)) * fluidStrength;
-	float FR = ReadTrail(frontRightPos) + (PI - AngleDifference(angle - sensorAngle, _DirectionAngle)) * _DirectionStrength + (PI - AngleDifference(angle - sensorAngle, fluidAngle)) * fluidStrength;
+
+	float directionAngle = _DirectionAngle;
+
+	if (pos.x > 0) {
+		if (pos.y > 0) {
+			directionAngle = atan(pos.y / pos.x);
+		}
+		else {
+			directionAngle = PI * 2 + atan(pos.y / pos.x);
+		}
+	}
+	else {
+		directionAngle = PI + atan(pos.y / pos.x);
+	}
+
+	if (_DirectionStrength < 0)
+		directionAngle += PI;
+
+	float F = ReadTrail(frontPos) + (PI - AngleDifference(angle, directionAngle)) * _DirectionStrength + (PI - AngleDifference(angle, fluidAngle)) * fluidStrength;
+	float FL = ReadTrail(frontLeftPos) + (PI - AngleDifference(angle + sensorAngle, directionAngle)) * _DirectionStrength + (PI - AngleDifference(angle + sensorAngle, fluidAngle)) * fluidStrength;
+	float FR = ReadTrail(frontRightPos) + (PI - AngleDifference(angle - sensorAngle, directionAngle)) * _DirectionStrength + (PI - AngleDifference(angle - sensorAngle, fluidAngle)) * fluidStrength;
 
 	//decide on the next best step
 	if((F > FL) && (F > FR))
@@ -344,9 +386,8 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	
 	uint2 nextPosCoords = GetUVFromPosition(nextPos) * _TrailResolution.xy;
 
-	//if the particle moved, leave a mark in the trail buffer
-	if(distance(nextPos, pos) > 0.0001)
-	{
+	if (nextPosCoords.x > 0 && nextPosCoords.x < _TrailResolution.x - 1 && nextPosCoords.y > 0 && nextPosCoords.y < _TrailResolution.y - 1) {
+		//Leave a mark in the trail buffer
 		_TrailWrite[nextPosCoords] += _ParticleBuffer[id.x].color * 0.01f;	//Additive
 		//_TrailWrite[nextPosCoords] = max(_ParticleBuffer[id.x].color, _TrailRead[nextPosCoords]);	//Max
 		//_TrailWrite[nextPosCoords] = _ParticleBuffer[id.x].color; //Replace
@@ -367,24 +408,28 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 [numthreads(NUM_THREADS, NUM_THREADS,1)]
 void UpdateTrail (uint3 id : SV_DISPATCHTHREADID)
 {
-
 	uint2 sampleId = id.xy +_Gravity;
 	float4 value = _TrailRead[sampleId];
 	
-	float3 d = float3(1, -1, 0.0);
+	if (id.x == 0 || id.x >= _TrailResolution.x -1 || id.y == 0 || id.y >=_TrailResolution.y -1) {
+		value = float4(0, 0, 0, 0);
+	}
+	else {
+		float3 d = float3(1, -1, 0.0);
 
-	//mean filter
-	value = value;
-	value += _TrailRead[sampleId - d.xx]; // -1,-1
-	value += _TrailRead[sampleId - d.zx]; // 0, -1
-	value += _TrailRead[sampleId - d.yx]; // +1, -1
-	value += _TrailRead[sampleId - d.xz]; // -1, 0
-	value += _TrailRead[sampleId + d.xz]; // +1, 0
-	value += _TrailRead[sampleId + d.yx]; // -1, +1
-	value += _TrailRead[sampleId + d.zx]; // 0, +1
-	value += _TrailRead[sampleId + d.xx]; // +1, +1
-	
-	value = (value / 9) * (1-_Decay);
+		//mean filter
+		value = value;
+		value += _TrailRead[sampleId - d.xx]; // -1,-1
+		value += _TrailRead[sampleId - d.zx]; // 0, -1
+		value += _TrailRead[sampleId - d.yx]; // +1, -1
+		value += _TrailRead[sampleId - d.xz]; // -1, 0
+		value += _TrailRead[sampleId + d.xz]; // +1, 0
+		value += _TrailRead[sampleId + d.yx]; // -1, +1
+		value += _TrailRead[sampleId + d.zx]; // 0, +1
+		value += _TrailRead[sampleId + d.xx]; // +1, +1
+
+		value = (value / 9) * (1 - _Decay);
+	}
 
 	_TrailWrite[id.xy] = value;
 }
@@ -402,7 +447,6 @@ void AdvectTrail(uint3 id : SV_DISPATCHTHREADID)
 [numthreads(NUM_THREADS, NUM_THREADS, 1)]
 void UpdateVelocities(uint3 id : SV_DISPATCHTHREADID)
 {
-
 	uint2 sampleId = id.xy;
 	float4 value = _VelocitiesBuffer[sampleId];
 

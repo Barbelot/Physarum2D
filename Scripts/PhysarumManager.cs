@@ -5,7 +5,7 @@ using UnityEngine.VFX;
 public class PhysarumManager : MonoBehaviour
 {
     [Header("Behaviour ID")]
-    public string ID;
+    public string ID = "Main";
 
 	[Header("Compute shader")]
     public ComputeShader shader;
@@ -217,6 +217,10 @@ public class PhysarumManager : MonoBehaviour
         shader.SetVector("_EmitterPosition", emitter.position);
         shader.SetVector("_EmitterPreviousPosition", emitter.previousPosition);
         shader.SetFloat("_EmitterRadius", emitter.radius);
+        shader.SetFloat("_EmitterRadiusWidth", emitter.radiusWidth);
+        shader.SetFloat("_EmitterArcLength", emitter.arcLength * Mathf.PI * 2);
+        shader.SetFloat("_EmitterArcOffset", emitter.arcOffset * Mathf.PI * 2);
+        shader.SetFloat("_EmitterArcFeathering", emitter.arcFeathering);
         shader.SetFloat("_EmitterSpawnRate", emitter.spawnRate);
         shader.SetFloat("_EmitterColorIntensity", emitter.colorIntensity);
         shader.SetVector("_EmitterMainColor", emitter.mainColor);
@@ -369,6 +373,10 @@ public class PhysarumManager : MonoBehaviour
         shader.SetVector("_EmitterPosition", _emittersList[index].position);
         shader.SetVector("_EmitterPreviousPosition", _emittersList[index].previousPosition);
         shader.SetFloat("_EmitterRadius", _emittersList[index].radius);
+        shader.SetFloat("_EmitterRadiusWidth", _emittersList[index].radiusWidth);
+        shader.SetFloat("_EmitterArcLength", _emittersList[index].arcLength * Mathf.PI * 2);
+        shader.SetFloat("_EmitterArcOffset", _emittersList[index].arcOffset * Mathf.PI * 2);
+        shader.SetFloat("_EmitterArcFeathering", _emittersList[index].arcFeathering);
         shader.SetFloat("_EmitterSpawnRate", _emittersList[index].spawnRate);
         shader.SetFloat("_EmitterColorIntensity", _emittersList[index].colorIntensity);
         shader.SetVector("_EmitterMainColor", _emittersList[index].mainColor);

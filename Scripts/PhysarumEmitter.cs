@@ -11,7 +11,7 @@ public class PhysarumEmitter : MonoBehaviour
 	//[Tooltip("Is your emitter centered on its origin ?")] public bool isCentered = false;
 
 	[Header("Physarum Manager")]
-	public string managerID;
+	public string managerID = "Main";
 
 	[Header("Emission")]
 	public int capacity = 2000000;
@@ -24,6 +24,11 @@ public class PhysarumEmitter : MonoBehaviour
 	public Vector2 lifetimeMinMax = new Vector2(5, 15);
 	[Header("Size")]
 	public float radius = 0.1f;
+	public float radiusWidth = 1;
+	[Range(0, 1)] public float arcLength = 1;
+	public float arcOffset = 0;
+	[Range(0, 1)] public float arcFeathering = 0;
+
 	[Header("Color")]
 	public float colorIntensity = 1;
 	[ColorUsage(true, true)] public Color mainColor = Color.white;
