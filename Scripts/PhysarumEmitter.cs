@@ -67,7 +67,20 @@ public class PhysarumEmitter : MonoBehaviour
 
 	private void Update() {
 
-		UpdateEmitter();
+		if(_physarumManager.updateTime == PhysarumManager.UpdateTime.Update)
+			UpdateEmitter();
+	}
+
+	private void LateUpdate() {
+
+		if (_physarumManager.updateTime == PhysarumManager.UpdateTime.LateUpdate)
+			UpdateEmitter();
+	}
+
+	private void FixedUpdate() {
+
+		if (_physarumManager.updateTime == PhysarumManager.UpdateTime.FixedUpdate)
+			UpdateEmitter();
 	}
 
 	private void OnDisable() {
