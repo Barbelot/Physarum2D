@@ -73,9 +73,6 @@ float2 _ParticlePositionMapSize;
 
 float2 _Gravity;
 
-float _DirectionAngle;
-float _DirectionStrength;
-
 Texture2D<float4> _FluidTexture;
 float2 _FluidResolution;
 float _FluidStrength;
@@ -322,27 +319,9 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 		}
 	}
 
-
-	float directionAngle = _DirectionAngle;
-
-	if (pos.x > 0) {
-		if (pos.y > 0) {
-			directionAngle = atan(pos.y / pos.x);
-		}
-		else {
-			directionAngle = PI * 2 + atan(pos.y / pos.x);
-		}
-	}
-	else {
-		directionAngle = PI + atan(pos.y / pos.x);
-	}
-
-	if (_DirectionStrength < 0)
-		directionAngle += PI;
-
-	float F = ReadTrail(frontPos) + (PI - AngleDifference(angle, directionAngle)) * _DirectionStrength + (PI - AngleDifference(angle, fluidAngle)) * fluidStrength;
-	float FL = ReadTrail(frontLeftPos) + (PI - AngleDifference(angle + sensorAngle, directionAngle)) * _DirectionStrength + (PI - AngleDifference(angle + sensorAngle, fluidAngle)) * fluidStrength;
-	float FR = ReadTrail(frontRightPos) + (PI - AngleDifference(angle - sensorAngle, directionAngle)) * _DirectionStrength + (PI - AngleDifference(angle - sensorAngle, fluidAngle)) * fluidStrength;
+	float F = ReadTrail(frontPos) + (PI - AngleDifference(angle, fluidAngle)) * fluidStrength;
+	float FL = ReadTrail(frontLeftPos) + (PI - AngleDifference(angle + sensorAngle, fluidAngle)) * fluidStrength;
+	float FR = ReadTrail(frontRightPos) + (PI - AngleDifference(angle - sensorAngle, fluidAngle)) * fluidStrength;
 
 	//decide on the next best step
 	if	((F < FL) && (F < FR))

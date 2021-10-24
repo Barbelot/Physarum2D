@@ -43,8 +43,6 @@ public class PhysarumManager : MonoBehaviour
     [Header("Particles Settings")]
     [Range(-180f, 180f)] public float gravityAngle;
     public float gravityStrength = 0;
-    [Range(0, 360f)] public float directionAngle;
-    public float directionStrength = 0;
 
     [Header("Debug")]
     public bool debugParticles = false;
@@ -405,8 +403,6 @@ public class PhysarumManager : MonoBehaviour
         shader.SetBool("_StimuliActive", useStimuli);
         shader.SetFloat("_StimuliIntensity", stimuliIntensity);
         shader.SetBool("_StimuliToColor", colorFromStimuli);
-        shader.SetFloat("_DirectionAngle", directionAngle * Mathf.Deg2Rad);
-        shader.SetFloat("_DirectionStrength", directionStrength);
 
         shader.SetFloat("_FluidStrength", fluidStrength * _emittersList[index].fluidStrength);
 
