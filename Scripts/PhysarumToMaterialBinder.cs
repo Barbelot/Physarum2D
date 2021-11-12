@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PhysarumMaterialBinder : MonoBehaviour
+public class PhysarumToMaterialBinder : MonoBehaviour
 {
     public PhysarumManager physarumManager;
     public Material material;
