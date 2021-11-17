@@ -342,15 +342,50 @@ void MoveParticles (uint3 id: SV_DISPATCHTHREADID)
 	nextPos += _Gravity;
 
 	_ParticleBuffer[id.x].position = nextPos;
-	
+
 	uint2 nextPosCoords = GetUVFromPosition(nextPos) * _TrailResolution.xy;
 
-	if (nextPosCoords.x > 0 && nextPosCoords.x < _TrailResolution.x - 1 && nextPosCoords.y > 0 && nextPosCoords.y < _TrailResolution.y - 1) {
+	if (nextPosCoords.x > 1 && nextPosCoords.x < _TrailResolution.x - 2 && nextPosCoords.y > 1 && nextPosCoords.y < _TrailResolution.y - 2) {
+
 		//Leave a mark in the trail buffer
 		_TrailWrite[nextPosCoords] += _ParticleBuffer[id.x].color * 0.01f;	//Additive
 		//_TrailWrite[nextPosCoords] = max(_ParticleBuffer[id.x].color, _TrailRead[nextPosCoords]);	//Max
 		//_TrailWrite[nextPosCoords] = _ParticleBuffer[id.x].color; //Replace
-		//_TrailWrite[nextPosCoords] = lerp(max(_ParticleBuffer[id.x].color, _TrailRead[nextPosCoords]), _ParticleBuffer[id.x].color, 0.5f);
+
+		//Bilinear writing
+		//float2 nextPosCoords = GetUVFromPosition(nextPos) * _TrailResolution.xy;
+		//float2 d = frac(nextPosCoords);
+
+		//if (d.x <= 0.5f && d.y <= 0.5f) {
+		//	d = 0.5f - d;
+		//	_TrailWrite[nextPosCoords] += _ParticleBuffer[id.x].color * 0.01f * ((1.0f - d.x) * (1.0f - d.y));
+		//	_TrailWrite[nextPosCoords - uint2(0, 1)] += _ParticleBuffer[id.x].color * 0.01f * ((1.0f - d.x) * d.y);
+		//	_TrailWrite[nextPosCoords - uint2(1, 0)] += _ParticleBuffer[id.x].color * 0.01f * ((1.0f - d.y) * d.x);
+		//	_TrailWrite[nextPosCoords - uint2(1, 1)] += _ParticleBuffer[id.x].color * 0.01f * (d.x * d.y);
+		//}
+		//else if (d.x > 0.5f && d.y > 0.5f) {
+		//	d = d - 0.5f;
+		//	_TrailWrite[nextPosCoords] += _ParticleBuffer[id.x].color * 0.01f * ((1.0f - d.x) * (1.0f - d.y));
+		//	_TrailWrite[nextPosCoords + uint2(0, 1)] += _ParticleBuffer[id.x].color * 0.01f * ((1.0f - d.x) * d.y);
+		//	_TrailWrite[nextPosCoords + uint2(1, 0)] += _ParticleBuffer[id.x].color * 0.01f * ((1.0f - d.y) * d.x);
+		//	_TrailWrite[nextPosCoords + uint2(1, 1)] += _ParticleBuffer[id.x].color * 0.01f * (d.x * d.y);
+		//}
+		//else if (d.x <= 0.5f && d.y > 0.5f) {
+		//	d.x = 0.5f - d.x;
+		//	d.y = d.y - 0.5f;
+		//	_TrailWrite[nextPosCoords] += _ParticleBuffer[id.x].color * 0.01f * ((1.0f - d.x) * (1.0f - d.y));
+		//	_TrailWrite[nextPosCoords + uint2(0, 1)] += _ParticleBuffer[id.x].color * 0.01f * ((1.0f - d.x) * d.y);
+		//	_TrailWrite[nextPosCoords - uint2(1, 0)] += _ParticleBuffer[id.x].color * 0.01f * ((1.0f - d.y) * d.x);
+		//	_TrailWrite[nextPosCoords + int2(-1, 1)] += _ParticleBuffer[id.x].color * 0.01f * (d.x * d.y);
+		//}
+		//else if (d.x > 0.5f && d.y <= 0.5f) {
+		//	d.x = d.x - 0.5f;
+		//	d.y = 0.5f - d.y;
+		//	_TrailWrite[nextPosCoords] += _ParticleBuffer[id.x].color * 0.01f * ((1.0f - d.x) * (1.0f - d.y));
+		//	_TrailWrite[nextPosCoords - uint2(0, 1)] += _ParticleBuffer[id.x].color * 0.01f * ((1.0f - d.x) * d.y);
+		//	_TrailWrite[nextPosCoords + uint2(1, 0)] += _ParticleBuffer[id.x].color * 0.01f * ((1.0f - d.y) * d.x);
+		//	_TrailWrite[nextPosCoords + int2(1, -1)] += _ParticleBuffer[id.x].color * 0.01f * (d.x * d.y);
+		//}
 	}
 	
 	_ParticleBuffer[id.x].angle = angle;

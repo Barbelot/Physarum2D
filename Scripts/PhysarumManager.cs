@@ -228,6 +228,7 @@ public class PhysarumManager : MonoBehaviour
     {
         _trailRead = new RenderTexture(trailResolution.x, trailResolution.y, 0, RenderTextureFormat.ARGBFloat);
         _trailRead.enableRandomWrite = true;
+        //_trailRead.antiAliasing = 4;
         _trailRead.Create();
 
         _trailWrite = new RenderTexture(trailResolution.x, trailResolution.y, 0, RenderTextureFormat.ARGBFloat);
@@ -398,8 +399,10 @@ public class PhysarumManager : MonoBehaviour
     void MoveParticles(int index) {
 
         shader.SetFloat("_EmitterSensorAngle", _emittersList[index].sensorAngleDegrees * Mathf.Deg2Rad);
-        shader.SetFloat("_EmitterSensorOffsetDistance", _emittersList[index].propagationScale);
-        shader.SetFloat("_EmitterStepSize", _emittersList[index].propagationScale * _deltaTime);
+        //shader.SetFloat("_EmitterSensorOffsetDistance", _emittersList[index].propagationScale * _deltaTime);
+        //shader.SetFloat("_EmitterStepSize", _emittersList[index].propagationScale * _deltaTime);
+        shader.SetFloat("_EmitterSensorOffsetDistance", _emittersList[index].sensorOffsetDistance * _deltaTime);
+        shader.SetFloat("_EmitterStepSize", _emittersList[index].stepSize * _deltaTime);
         shader.SetBool("_StimuliActive", useStimuli);
         shader.SetFloat("_StimuliIntensity", stimuliIntensity);
         shader.SetBool("_StimuliToColor", colorFromStimuli);
